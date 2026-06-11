@@ -60,10 +60,36 @@ yarn lint-staged
 - run the `docker compose up -d` to install the images
 
 ### Config
- - install config package
- - update the `src/app.module.ts` and `src/app.controller.ts`
- - run the development enviroment and test the response
+
+- install config package
+- update the `src/app.module.ts` and `src/app.controller.ts`
+- run the development enviroment and test the response
 
 ```bash
 npm install @nestjs/config
+```
+
+# Phase 1 — Database Setup with Prisma
+
+### Install Prisma
+
+- first install prisma
+- then initialie prisma
+- update the `prisma/schema.prisma` and add the database url to the datasource db
+- Add the Model User to the `schema.prisma`
+- Then run migrations
+
+```sh
+# installation
+yarn add prisma --dev
+yarn add @prisma/client
+
+# initialization
+npx prisma init
+
+# After changes in prisma schema.prisma - run migrations
+npx prisma migrate dev --name init
+
+# Open Prisma Studio on http://localhost:5555
+npx prisma studio
 ```

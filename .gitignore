@@ -24,3 +24,5 @@ lerna-debug.log*
 .tmp
 coverage/
 .cursor/
+
+/src/generated/prisma
