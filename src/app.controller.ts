@@ -6,7 +6,7 @@ export class AppController {
   health() {
     return {
       status: 'ok',
-      service: 'pulsechat',
+      service: 'pulsechat 1.0.0',
       environment: process.env.NODE_ENV,
       version: process.env.npm_package_version,
     };
