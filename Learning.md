@@ -68,6 +68,8 @@ yarn lint-staged
 ```bash
 npm install @nestjs/config
 ```
+---
+---
 
 # Phase 1 — Database Setup with Prisma
 
@@ -93,3 +95,6 @@ npx prisma migrate dev --name init
 # Open Prisma Studio on http://localhost:5555
 npx prisma studio
 ```
+
+
+# Add Prisma Service in Nest JS
