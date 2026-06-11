@@ -69,7 +69,35 @@ yarn lint-staged
 npm install @nestjs/config
 ```
 
-## Database Setup with Prisma
+### Switch Express → Fastify
+
+```sh
+yarn remove @nestjs/platform-express
+yarn add @nestjs/platform-fastify @fastify/helmet @fastify/cors @fastify/static
+```
+
+```ts
+// main.ts
+const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,
+  new FastifyAdapter({ logger: false, trustProxy: true }),
+  { logger: ['error', 'warn', 'log'] },
+);
+
+await app.register(helmet);
+await app.register(cors, { origin: true });
+
+await app.listen(port, '0.0.0.0'); // bind all interfaces (Docker-friendly)
+```
+
+**Notes**
+
+- Use `@fastify/*` plugins — not Express middleware (`multer` → `@fastify/multipart`).
+- In controllers/guards, use `FastifyRequest` / `FastifyReply` instead of Express types.
+- E2E tests need `FastifyAdapter` too — see `test/app.e2e-spec.ts`.
+- Put static files in `public/` — served at `/public/`.
+
+### Database Setup with Prisma
 
 ### Install Prisma
 
