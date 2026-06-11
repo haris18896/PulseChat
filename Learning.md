@@ -69,7 +69,7 @@ yarn lint-staged
 npm install @nestjs/config
 ```
 
-# Phase 1 — Database Setup with Prisma
+## Database Setup with Prisma
 
 ### Install Prisma
 
@@ -92,4 +92,13 @@ npx prisma migrate dev --name init
 
 # Open Prisma Studio on http://localhost:5555
 npx prisma studio
+```
+
+## Add Prisma Service in Nest JS
+
+- Cretae prisma module
+
+```sh
+nest g module prisma # src/prisma/prisma.module.ts
+nest g service prisma # src/prisma/prisma.service.ts
 ```
