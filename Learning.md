@@ -68,7 +68,9 @@ yarn lint-staged
 ```bash
 npm install @nestjs/config
 ```
+
 ---
+
 ---
 
 ### Switch Express → Fastify
@@ -121,7 +123,8 @@ npx prisma init
 npx prisma migrate dev --name init
 
 # Open Prisma Studio on http://localhost:5555
-npx prisma studio
+npx prisma generate
+npx prisma studio --port 5555
 ```
 
 ## Add Prisma Service in Nest JS
