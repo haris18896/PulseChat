@@ -10,6 +10,8 @@ import fastifyStatic from '@fastify/static';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 function parseCorsOrigins(value: string): boolean | string[] {
   if (value === '*') {
@@ -23,6 +25,7 @@ function parseCorsOrigins(value: string): boolean | string[] {
 }
 
 async function bootstrap() {
+  // NestJS application
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
@@ -33,6 +36,18 @@ async function bootstrap() {
     { logger: ['error', 'warn', 'log'] },
   );
 
+  // Swagger configuration
+  const config = new DocumentBuilder()
+    .setTitle('PulseChat API')
+    .setDescription('Realtime Chat API')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
+  // Configuration
   const configService = app.get(ConfigService);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
   const isProduction = nodeEnv === 'production';
@@ -41,24 +56,9 @@ async function bootstrap() {
     'CORS_ORIGINS',
     'http://localhost:3000',
   );
+
+  // Public directory
   const publicDir = join(process.cwd(), 'public');
-
-  // CORS must register before routes; explicit origins are safer than `origin: true` in production.
-  await app.register(cors, {
-    origin: parseCorsOrigins(corsOrigins),
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  });
-
-  await app.register(helmet, {
-    // JSON APIs do not serve HTML; disable CSP to avoid breaking future Socket.IO clients.
-    contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: isProduction ? { policy: 'same-site' } : false,
-  });
-
-  // CSRF is not enabled globally: this API is stateless (JWT bearer tokens).
-  // When cookie-based sessions are added, register @fastify/cookie + @fastify/csrf-protection.
 
   if (existsSync(publicDir)) {
     await app.register(fastifyStatic, {
@@ -67,8 +67,36 @@ async function bootstrap() {
     });
   }
 
+  // CORS configuration
+  await app.register(cors, {
+    origin: parseCorsOrigins(corsOrigins),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
+
+  // Helmet configuration
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: isProduction ? { policy: 'same-site' } : false,
+  });
+
+  // CSRF is not enabled globally: this API is stateless (JWT bearer tokens).
+  // When cookie-based sessions are added, register @fastify/cookie + @fastify/csrf-protection.
+
+  // Shutdown hooks
   app.enableShutdownHooks();
 
+  // Validation pipe
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  // Listen on port
   await app.listen(port, '0.0.0.0');
 }
 

@@ -1,30 +1,3 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
-
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
 ## Project setup
 
 ```bash
@@ -70,29 +43,260 @@ $ mau deploy
 
 With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
 
-## Resources
+# Phase 0 — Project Setup
 
-Check out a few resources that may come in handy when working with NestJS:
+### Create Nest Js APP
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```sh
+sudo npm i -g @nestjs/cli
+nest new <ProjectName> --strict # to create project in current directory use dot.
+yarn add @types/mocha --dev
+yarn add @nestjs/swagger
+```
 
-## Support
+- add the following code to `main.ts` for swagger
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```ts
+// main.ts
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
-## Stay in touch
+const config = new DocumentBuilder()
+  .setTitle('PulseChat API')
+  .setDescription('Realtime Chat API')
+  .setVersion('1.0')
+  .addBearerAuth()
+  .build();
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+const document = SwaggerModule.createDocument(app, config);
 
-## License
+SwaggerModule.setup('api', app, document);
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```typescript
+// tsconfig.json
+// update the baseUrl: ./ to path
+
+//...............
+{
+    "compilerOptions" : {
+        "paths": {
+            "*": ["./*"]
+    },
+        //............
+        "types": ["jest", "node"]
+        //................
+    },
+    "include": ["src/**/*", "test/**/*"]
+}
+```
+
+### Husky (git hooks)
+
+```sh
+yarn add -D husky lint-staged
+yarn husky init
+```
+
+Add to `package.json`:
+
+```json
+"lint-staged": {
+  "*.{ts,js,mjs}": ["eslint --fix", "prettier --write"]
+}
+```
+
+Set `.husky/pre-commit`:
+
+```sh
+yarn lint-staged
+```
+
+**Run**
+
+- Hooks run automatically on `git commit`.
+- After clone or pull, run `yarn` — the `prepare` script installs hooks.
+- Test manually: `yarn lint-staged` or `sh .husky/pre-commit`.
+
+### Docker setup
+
+- create the `docker-compose.yml` file
+- Add the postgres and redis image
+- run the `docker compose up -d` to install the images
+
+### Config
+
+- install config package
+- update the `src/app.module.ts` and `src/app.controller.ts`
+- run the development enviroment and test the response
+
+```bash
+npm install @nestjs/config
+```
+
+---
+
+---
+
+### Switch Express → Fastify
+
+```sh
+yarn remove @nestjs/platform-express
+yarn add @nestjs/platform-fastify @fastify/helmet @fastify/cors @fastify/static
+```
+
+```ts
+// main.ts
+const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,
+  new FastifyAdapter({ logger: false, trustProxy: true }),
+  { logger: ['error', 'warn', 'log'] },
+);
+
+await app.register(helmet);
+await app.register(cors, { origin: true });
+
+await app.listen(port, '0.0.0.0'); // bind all interfaces (Docker-friendly)
+```
+
+**Notes**
+
+- Use `@fastify/*` plugins — not Express middleware (`multer` → `@fastify/multipart`).
+- In controllers/guards, use `FastifyRequest` / `FastifyReply` instead of Express types.
+- E2E tests need `FastifyAdapter` too — see `test/app.e2e-spec.ts`.
+- Put static files in `public/` — served at `/public/`.
+
+### Database Setup with Prisma
+
+### Install Prisma
+
+- first install prisma
+- then initialie prisma
+- update the `prisma/schema.prisma` and add the database url to the datasource db
+- Add the Model User to the `schema.prisma`
+- Then run migrations
+
+```sh
+# installation
+yarn add prisma --dev
+yarn add @prisma/client
+
+# initialization
+npx prisma init
+
+# After changes in prisma schema.prisma - run migrations
+npx prisma migrate dev --name init
+
+# Open Prisma Studio on http://localhost:5555
+npx prisma generate
+npx prisma studio --port 5555
+```
+
+## Add Prisma Service in Nest JS
+
+- Cretae prisma module
+
+```sh
+nest g module prisma # src/prisma/prisma.module.ts
+nest g service prisma # src/prisma/prisma.service.ts
+```
+
+## Authentication
+
+- Registration Flow
+
+```
+Client sends email, username, password
+       ↓
+AuthController receives request
+       ↓
+AuthService validates data
+       ↓
+Password is hashed
+       ↓
+User is saved in Postgres
+       ↓
+JWT token is returned
+```
+
+- Login Flow
+
+```
+Client sends email and password
+        ↓
+Find user by email
+        ↓
+Compare password with hashed password
+        ↓
+If valid, return JWT token
+```
+
+- Protected Route Flow
+
+```
+Client sends Authorization: Bearer <token>
+       ↓
+JwtAuthGuard checks token
+       ↓
+If valid, user data is attached to request
+       ↓
+Controller can access current user
+```
+
+### Step - Install Packages
+
+- We are not using `Passport` yet.
+- Later we can add `Passport` if needed.
+
+```sh
+yarn add @nestjs/jwt bcrypt
+yarn add -D @types/bcrypt
+yarn add class-validator class-transformer
+```
+
+### Step 2 — Add JWT Config to .env
+
+- Add JWT Config to env
+
+```sh
+JWT_SECRET="super-secret-change-this-later"
+JWT_EXPIRES_IN="7d"
+```
+
+### Step 3 — Add Global Validation Pipe
+
+```ts
+// main.ts
+import { ValidationPipe } from '@nestjs/common';
+
+// Then add this before await app.listen(...):
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true, // Removes extra fields that are not in the DTO.
+    forbidNonWhitelisted: true, // Instead of silently removing extra fields, it throws an error.
+    transform: true, // Converts incoming plain JSON into DTO class objects.
+  }),
+);
+```
+
+### Step 4 — Generate Modules
+
+```sh
+nest g module users
+nest g service users
+
+nest g module auth
+nest g controller auth
+nest g service auth
+```
+
+### Step 5 — Create DTOs
+
+- `src/auth/dto/register.dto.ts`
+- `src/auth/dto/login.dto.ts`
+
+### Step 6 — UsersService
+
+- update these files according to the functionality
+
+- `src/users/users.service.ts`
+- `src/users/users.module.ts`
