@@ -665,3 +665,125 @@ Learn:
 - Ordering
 - Sender relationships
 
+## Phase 2 - Step 1: Prisma Data Model
+
+- Open `Primsa/schema.prisma` and add the models for the `Conversation`, `Message`, `ConversationParticipants`
+
+```prisma
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversations ConversationParticipant[]
+  messages Message[]
+}
+
+
+
+model Conversation {
+  id        String   @id @default(uuid())
+  title     String?
+  isGroup   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages Message[]
+}
+
+
+model ConversationParticipant {
+  id        String   @id @default(uuid())
+  conversationId String
+  userId String
+  joinedAt DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+
+model Message {
+  id        String   @id @default(uuid())
+  conversationId String
+  senderId String
+  content String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+```
+
+In the `User` model we have `conversations ConversationParticipant[]`.
+
+A user can be part of many conversations. But we don’t connect `User` directly to `Conversation`.
+
+We connect through `ConversationParticipant` Because later this table can store extra data like:
+
+```
+joinedAt
+role
+muted
+lastReadAt
+leftAt
+```
+
+`messages Message[]` A User can send many messages
+
+In the `Conversation` model `title` is optional becuase for 1-to-1 chat title can be empty but for group chat title needs to be there "Project Team" etc
+
+`participants ConversationParticipant[]` This means that one conversation can have many participants
+
+`ConversationParticipant` this is the join table
+
+```
+conversationId String
+userId String
+```
+
+This connects: `User ↔ Conversation`
+
+`@@unique([conversationId, userId])` This prevents duplicate participants. So the same user cannot be added twice to the same conversation.
+
+`onDelete: Cascade` If a conversation is deleted, related participants are deleted automatically.
+If a user is deleted, their participant rows are deleted automatically.
+
+In the `Message` Model `conversationId String` Message belongs to one conversation.
+
+`content String` For now, we only support text messages.
+
+later we can add:
+
+```
+imageUrl
+fileUrl
+messageType
+editedAt
+deletedAt
+```
+
+- Now we need to run migrations and generate the prisma client and then open the studio to check
+
+```sh
+npx prisma migrate dev --name add_conversations_and_messages
+npx prisma generate
+npx prisma studio
+```
+
+in the studio you should now see
+
+```
+User
+Conversation
+ConversationParticipant
+Message
+```
