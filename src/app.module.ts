@@ -17,6 +17,7 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
 import { AuthModule } from './auth/auth.module';
 import { RedisModule } from './redis/redis.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { MessagesModule } from './messages/messages.module';
 import { ConversationsModule } from './conversations/conversations.module';
 
 @Module({
@@ -44,6 +45,7 @@ import { ConversationsModule } from './conversations/conversations.module';
     RedisModule,
     AuthModule,
     ConversationsModule,
+    MessagesModule,
   ],
   controllers: [AppController],
   providers: [
