@@ -866,3 +866,98 @@ this became
 ```
 
 - `in similar way we will be creating the messages as well`
+
+## Phase 2 - Step 3 - Pagination to the Messages api
+
+- so far we have added the conversation, getconversationById, get all conversations, create message and get messages by conversations
+- now we need to add the pagination to the `getMessageByConversations` api,
+
+### Why Pagination?
+
+Right now, this endpoint returns all messages.
+
+That is fine with 5 messages.
+
+But imagine:
+
+`1 conversation = 50,000 messages`
+
+Bad API:
+
+GET `/messages/:conversationId`
+→ returns 50,000 messages
+
+Problems:
+
+```
+slow response
+high database load
+huge frontend memory usage
+bad mobile performance
+```
+
+So instead we load messages in chunks.
+
+### Pagination Style for Chat
+
+For chat apps, we usually use:
+
+limit
+cursor
+
+Example:
+
+GET `/messages/:conversationId?limit=20`
+
+Then for older messages:
+
+GET `/messages/:conversationId?limit=20&cursor=message-id`
+
+This means:
+
+Give me 20 messages older than this message.
+
+```ts
+// message.service.ts
+// .........................
+const limit = query.limit || 20;
+
+const messages = await this.prisma.message.findMany({
+  where: {
+    conversationId,
+  },
+  orderBy: {
+    createdAt: 'desc',
+  },
+  take: limit + 1,
+  ...(query.cursor
+    ? {
+        cursor: {
+          id: query.cursor,
+        },
+        skip: 1,
+      }
+    : {}),
+  include: {
+    sender: {
+      select: {
+        id: true,
+        username: true,
+        email: true,
+      },
+    },
+  },
+});
+
+const hasNextPage = messages.length > limit;
+const items = hasNextPage ? messages.slice(0, limit) : messages;
+const nextCursor = hasNextPage ? items[items.length - 1].id : null;
+
+return {
+  items: items?.reverse(),
+  pageInfo: {
+    nextCursor,
+    hasNextPage,
+  },
+};
+```

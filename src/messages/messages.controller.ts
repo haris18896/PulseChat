@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import {
   ApiBearerAuth,
@@ -13,6 +13,7 @@ import { UseGuards } from '@nestjs/common';
 import type { AuthenticatedUser } from 'src/auth/types/auth.type';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { CreateMessageDto } from './dto/create-message.dto';
+import { GetMessagesQueryDto } from './dto/get-messages-query.dto';
 
 @ApiTags('Messages')
 @ApiBearerAuth()
@@ -43,10 +44,12 @@ export class MessagesController {
   getMessagesByConversation(
     @CurrentUser() user: AuthenticatedUser,
     @Param('conversationId') conversationId: string,
+    @Query() query: GetMessagesQueryDto,
   ) {
     return this.messagesService.getMessagesByConversation(
       user.id,
       conversationId,
+      query,
     );
   }
 }

@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateMessageDto } from './dto/create-message.dto';
+import { GetMessagesQueryDto } from './dto/get-messages-query.dto';
 
 @Injectable()
 export class MessagesService {
@@ -60,6 +61,7 @@ export class MessagesService {
   async getMessagesByConversation(
     currentUserId: string,
     conversationId: string,
+    query: GetMessagesQueryDto,
   ) {
     const participant = await this.prisma.conversationParticipant.findFirst({
       where: {
@@ -74,10 +76,24 @@ export class MessagesService {
       );
     }
 
-    return this.prisma.message.findMany({
+    const limit = query.limit || 20;
+
+    const messages = await this.prisma.message.findMany({
       where: {
         conversationId,
       },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit + 1,
+      ...(query.cursor
+        ? {
+            cursor: {
+              id: query.cursor,
+            },
+            skip: 1,
+          }
+        : {}),
       include: {
         sender: {
           select: {
@@ -88,5 +104,17 @@ export class MessagesService {
         },
       },
     });
+
+    const hasNextPage = messages.length > limit;
+    const items = hasNextPage ? messages.slice(0, limit) : messages;
+    const nextCursor = hasNextPage ? items[items.length - 1].id : null;
+
+    return {
+      items: items?.reverse(),
+      pageInfo: {
+        nextCursor,
+        hasNextPage,
+      },
+    };
   }
 }
