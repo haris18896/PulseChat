@@ -300,3 +300,26 @@ nest g service auth
 
 - `src/users/users.service.ts`
 - `src/users/users.module.ts`
+
+### Step 7 - JWT Auth Guard + Current User Decorator
+
+- `src/auth/types/jwt-payload.type.ts`
+- `src/auth/guards/jwt-auth.guards.ts`
+- `src/auth/decorators/current-user.decorator.ts`
+ - - with out this decorator 
+
+```sh
+Client sends token
+        ↓
+JwtAuthGuard checks token
+        ↓
+Guard extracts userId from token
+        ↓
+Guard fetches user from database
+        ↓
+Guard attaches user to request
+        ↓
+@CurrentUser() reads that user
+        ↓
+Controller returns current user
+```
