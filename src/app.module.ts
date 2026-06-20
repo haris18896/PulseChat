@@ -8,15 +8,16 @@ import { AppService } from './app.service';
 // -- Controllers
 import { AppController } from './app.controller';
 
-// -- Modules
-import { AuthModule } from './auth/auth.module';
-import { RedisModule } from './redis/redis.module';
-import { PrismaModule } from './prisma/prisma.module';
-
 // -- Third Party
 import { Redis } from 'ioredis';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+
+// -- Modules
+import { AuthModule } from './auth/auth.module';
+import { RedisModule } from './redis/redis.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { ConversationsModule } from './conversations/conversations.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
     PrismaModule,
     RedisModule,
     AuthModule,
+    ConversationsModule,
   ],
   controllers: [AppController],
   providers: [

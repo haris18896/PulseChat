@@ -787,3 +787,50 @@ Conversation
 ConversationParticipant
 Message
 ```
+
+## Phase 2 — Step 2: Conversation Module + First API
+
+- we will create `POST /conversations`, this api will:
+
+```
+1. Require JWT auth
+2. Read current user from @CurrentUser()
+3. Accept participant user IDs
+4. Create a conversation
+5. Add current user + selected users as participants
+```
+
+- Generate Conversation Module
+
+```sh
+nest g resource conversation
+
+<OR>
+
+nest g module conversations
+nest g controller conversations
+nest g service conversations
+
+```
+
+in the `conversations.service.ts`:
+
+- `[...new Set([currentUserId, ...dto.participantIds]),];` this reomves duplicate users
+- `if (uniqueParticipantIds.length < 2)` A chat with yourself isn't valid for now
+- ```
+  participants: {
+    create: uniqueParticipantIds.map(...)
+  }
+  ```
+
+this creates the conversation and participant rows together
+
+Now we need to update the `conversation.controller.ts`
+
+```
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+```
+
+Applied at controller level. So all routes inside this controller are protected.
+`@CurrentUser() user` this gets the logged in user from the JWT guard
