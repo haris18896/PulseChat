@@ -200,7 +200,9 @@ nest g module prisma # src/prisma/prisma.module.ts
 nest g service prisma # src/prisma/prisma.service.ts
 ```
 
-## Authentication
+## Phase 1 - Authentication and Jwt Guards
+
+### Authentication
 
 - Registration Flow
 
@@ -306,7 +308,7 @@ nest g service auth
 - `src/auth/types/jwt-payload.type.ts`
 - `src/auth/guards/jwt-auth.guards.ts`
 - `src/auth/decorators/current-user.decorator.ts`
- - - with out this decorator 
+- - with out this decorator
 
 ```sh
 Client sends token
@@ -322,4 +324,640 @@ Guard attaches user to request
 @CurrentUser() reads that user
         ↓
 Controller returns current user
+```
+
+## Phase 2 - Conversation & Message Data Model
+
+By the end of this phase, we will have:
+
+- ✅ Conversation database schema
+- ✅ Message database schema
+- ✅ Conversation participants
+- ✅ Prisma relationships
+- ✅ Migration
+- ✅ Prisma Studio verification
+- ✅ First Conversation APIs (REST)
+- ✅ Swagger documentation
+
+Notice that we are still NOT touching Socket.IO.
+Why?
+Because Realtime is just a transport layer.
+If your database and business logic are poorly designed, Socket.IO will only make those problems happen faster.
+
+## The Big Picture
+
+Imagine WhatsApp. You don't actually send a message directly to another user. The message belongs to a Conversation, not directly to another user.
+
+```sh
+You
+ │
+ │  "Hello"
+ ▼
+Conversation
+ │
+ ├── User A
+ ├── User B
+ │
+ ▼
+Message
+```
+
+Why?
+
+Because tomorrow you may have:
+
+```
+You
+Ahmed
+Ali
+Sara
+```
+
+All in one conversation. If a message belonged to a receiver instead:
+
+```
+Message
+--------
+senderId
+receiverId
+```
+
+It completely breaks group chats.
+Instead:
+
+```
+Conversation
+      │
+      ▼
+Participants
+      │
+      ▼
+Messages
+```
+
+This scales forever
+
+## Database Design
+
+We'll create three new tables.
+
+1. User -> this table already exist
+2. Conversation -> Represents a chat
+3. ConversationParticipant -> this connects Users and Conversations
+4. Message -> this Stores every message ever sent
+
+```
+Conversation 1
+
+↓
+
+Haris
+
+↓
+
+Ali
+```
+
+## Final Relationship
+
+This is a classic many-to-many relationship.
+
+```
+User
+│
+├──────────────┐
+│              │
+│              ▼
+│     ConversationParticipant
+│              │
+│              ▼
+│       Conversation
+│              │
+│              ▼
+└────────── Message
+```
+
+## Why We Need a Join Table
+
+Question: Why not simply do:
+
+```
+Conversation
+
+users[]
+```
+
+Because relational databases don't store arrays of foreign keys well.
+
+Instead we normalize the data.
+
+Example:
+
+Conversation
+
+```
+id
+1
+```
+
+ConversationParticipant
+
+```
+conversationId     userId
+1                   Haris
+1                   Ali
+1                   Ahmed
+```
+
+Now we can have:
+
+```
+2 users
+10 users
+500 users
+```
+
+No schema changes.
+
+## Messages
+
+Every message belongs to:
+
+- one sender
+- one conversation
+  Message
+
+```
+id
+conversationId
+senderId
+content
+createdAt
+```
+
+Notice: No receiverId.
+
+The conversation already knows who the participants are.
+
+## What About Read Receipts?
+
+Not yet.
+
+We'll add those later.
+
+This is exactly how professional software is built:
+
+```
+Version 1
+
+Conversation
+Participants
+Messages
+```
+
+Later:
+
+```
+Version 2
+
+Read Receipts
+
+Typing
+
+Presence
+
+Pinned Messages
+
+Attachments
+
+Message Reactions
+```
+
+Each feature gets its own migration.
+
+## Why Aren't We Storing Online Status?
+
+Because online status is temporary.
+
+Database:
+
+```
+User
+
+online = true
+```
+
+That is `Bad`.
+
+Suppose the server crashes.
+
+Everyone remains: `online = true`
+
+Wrong.
+
+Instead:
+
+Redis
+
+```
+user:123
+
+online
+```
+
+Redis stores temporary state.
+
+Postgres stores permanent state.
+
+This separation is one of the most important architectural concepts you'll learn.
+
+## Folder Strucutre
+
+After this phase, your project will begin to grow into a real backend.
+
+```
+src
+│
+├── auth
+├── users
+├── prisma
+├── redis
+│
+├── conversations
+│     ├── dto
+│     ├── conversation.controller.ts
+│     ├── conversation.service.ts
+│     ├── conversation.module.ts
+│
+└── messages
+      ├── dto
+      ├── message.controller.ts
+      ├── message.service.ts
+      ├── message.module.ts
+```
+
+Notice something.
+
+We are organizing by feature, not by file type.
+
+This is the architecture used in most mature NestJS applications because each feature owns its controller, service, DTOs, and related logic.
+
+## Phase 2 Roadmap
+
+We'll break this into small learning steps, just like we did with authentication.
+
+#### Step 1 — Database Design (Prisma)
+
+- Add `Conversation`
+- Add `ConversationParticipant`
+- Add `Message`
+- Explain every relationship
+- Run migration
+- Verify in Prisma Studio
+
+#### Step 2 — Conversation Module
+
+- Generate module
+- Service
+- Controller
+- Swagger setup
+
+#### Step 3 — Create Conversation
+
+`POST /conversations`
+
+Learn:
+
+- Business logic
+- Transactions
+- Duplicate conversation prevention
+
+#### Step 4 — Get My Conversations
+
+`GET /conversations`
+
+Learn:
+
+- Prisma relations
+- Includes
+- Filtering
+- Sorting
+
+#### Step 5 — Conversation Details
+
+`GET /conversations/:id`
+
+Learn:
+
+- Authorization
+- Membership checks
+- Nested queries
+
+#### Step 6 — Message APIs (REST)
+
+`POST /messages`
+
+`GET /messages/:conversationId`
+
+Learn:
+
+- Pagination
+- Ordering
+- Sender relationships
+
+## Phase 2 - Step 1: Prisma Data Model
+
+- Open `Primsa/schema.prisma` and add the models for the `Conversation`, `Message`, `ConversationParticipants`
+
+```prisma
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversations ConversationParticipant[]
+  messages Message[]
+}
+
+
+
+model Conversation {
+  id        String   @id @default(uuid())
+  title     String?
+  isGroup   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages Message[]
+}
+
+
+model ConversationParticipant {
+  id        String   @id @default(uuid())
+  conversationId String
+  userId String
+  joinedAt DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+
+model Message {
+  id        String   @id @default(uuid())
+  conversationId String
+  senderId String
+  content String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+```
+
+In the `User` model we have `conversations ConversationParticipant[]`.
+
+A user can be part of many conversations. But we don’t connect `User` directly to `Conversation`.
+
+We connect through `ConversationParticipant` Because later this table can store extra data like:
+
+```
+joinedAt
+role
+muted
+lastReadAt
+leftAt
+```
+
+`messages Message[]` A User can send many messages
+
+In the `Conversation` model `title` is optional becuase for 1-to-1 chat title can be empty but for group chat title needs to be there "Project Team" etc
+
+`participants ConversationParticipant[]` This means that one conversation can have many participants
+
+`ConversationParticipant` this is the join table
+
+```
+conversationId String
+userId String
+```
+
+This connects: `User ↔ Conversation`
+
+`@@unique([conversationId, userId])` This prevents duplicate participants. So the same user cannot be added twice to the same conversation.
+
+`onDelete: Cascade` If a conversation is deleted, related participants are deleted automatically.
+If a user is deleted, their participant rows are deleted automatically.
+
+In the `Message` Model `conversationId String` Message belongs to one conversation.
+
+`content String` For now, we only support text messages.
+
+later we can add:
+
+```
+imageUrl
+fileUrl
+messageType
+editedAt
+deletedAt
+```
+
+- Now we need to run migrations and generate the prisma client and then open the studio to check
+
+```sh
+npx prisma migrate dev --name add_conversations_and_messages
+npx prisma generate
+npx prisma studio
+```
+
+in the studio you should now see
+
+```
+User
+Conversation
+ConversationParticipant
+Message
+```
+
+## Phase 2 — Step 2: Conversation Module + First API
+
+- we will create `POST /conversations`, this api will:
+
+```
+1. Require JWT auth
+2. Read current user from @CurrentUser()
+3. Accept participant user IDs
+4. Create a conversation
+5. Add current user + selected users as participants
+```
+
+- Generate Conversation Module
+
+```sh
+nest g resource conversation
+
+<OR>
+
+nest g module conversations
+nest g controller conversations
+nest g service conversations
+
+```
+
+in the `conversations.service.ts`:
+
+- `[...new Set([currentUserId, ...dto.participantIds]),];` this reomves duplicate users
+- `if (uniqueParticipantIds.length < 2)` A chat with yourself isn't valid for now
+- ```
+  participants: {
+    create: uniqueParticipantIds.map(...)
+  }
+  ```
+
+this creates the conversation and participant rows together
+
+Now we need to update the `conversation.controller.ts`
+
+```
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+```
+
+Applied at controller level. So all routes inside this controller are protected.
+`@CurrentUser() user` this gets the logged in user from the JWT guard
+
+at this point we have called the `/conversation` post request with the following payload
+
+```
+{
+  "participantIds": [
+    "5f7ef3ca-9900-4b7e-b95e-07ecc1630645",
+    "0b5c401e-980b-4dd0-a194-a5ca0d2e4092"
+  ],
+  "title": "Testing 001",
+  "isGroup": false
+}
+```
+
+if you have notifice the first id is our own, so our duplicate removal functionality also worked
+
+```
+[
+    Haris,
+    Haris,
+    Other User
+]
+
+this became
+
+[
+    Haris,
+    Other User
+]
+```
+
+- `in similar way we will be creating the messages as well`
+
+## Phase 2 - Step 3 - Pagination to the Messages api
+
+- so far we have added the conversation, getconversationById, get all conversations, create message and get messages by conversations
+- now we need to add the pagination to the `getMessageByConversations` api,
+
+### Why Pagination?
+
+Right now, this endpoint returns all messages.
+
+That is fine with 5 messages.
+
+But imagine:
+
+`1 conversation = 50,000 messages`
+
+Bad API:
+
+GET `/messages/:conversationId`
+→ returns 50,000 messages
+
+Problems:
+
+```
+slow response
+high database load
+huge frontend memory usage
+bad mobile performance
+```
+
+So instead we load messages in chunks.
+
+### Pagination Style for Chat
+
+For chat apps, we usually use:
+
+limit
+cursor
+
+Example:
+
+GET `/messages/:conversationId?limit=20`
+
+Then for older messages:
+
+GET `/messages/:conversationId?limit=20&cursor=message-id`
+
+This means:
+
+Give me 20 messages older than this message.
+
+```ts
+// message.service.ts
+// .........................
+const limit = query.limit || 20;
+
+const messages = await this.prisma.message.findMany({
+  where: {
+    conversationId,
+  },
+  orderBy: {
+    createdAt: 'desc',
+  },
+  take: limit + 1,
+  ...(query.cursor
+    ? {
+        cursor: {
+          id: query.cursor,
+        },
+        skip: 1,
+      }
+    : {}),
+  include: {
+    sender: {
+      select: {
+        id: true,
+        username: true,
+        email: true,
+      },
+    },
+  },
+});
+
+const hasNextPage = messages.length > limit;
+const items = hasNextPage ? messages.slice(0, limit) : messages;
+const nextCursor = hasNextPage ? items[items.length - 1].id : null;
+
+return {
+  items: items?.reverse(),
+  pageInfo: {
+    nextCursor,
+    hasNextPage,
+  },
+};
 ```
