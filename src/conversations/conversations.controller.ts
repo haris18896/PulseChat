@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Param } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import {
@@ -36,6 +36,18 @@ export class ConversationsController {
   @ApiOperation({ summary: 'Get my conversations' })
   getMyConversations(@CurrentUser() user: AuthenticatedUser) {
     return this.conversationsService.getMyConversations(user.id);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get conversation details' })
+  getConversationById(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+  ) {
+    return this.conversationsService.getConversationById(
+      user.id,
+      conversationId,
+    );
   }
 
   // @Patch(':id')
