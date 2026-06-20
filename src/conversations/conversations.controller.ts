@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import {
@@ -32,15 +32,11 @@ export class ConversationsController {
     return this.conversationsService.createConversation(user.id, dto);
   }
 
-  // @Get()
-  // findAll() {
-  //   return this.conversationsService.findAll();
-  // }
-
-  // @Get(':id')
-  // findOne(@Param('id') id: string) {
-  //   return this.conversationsService.findOne(+id);
-  // }
+  @Get()
+  @ApiOperation({ summary: 'Get my conversations' })
+  getMyConversations(@CurrentUser() user: AuthenticatedUser) {
+    return this.conversationsService.getMyConversations(user.id);
+  }
 
   // @Patch(':id')
   // update(@Param('id') id: string, @Body() updateConversationDto: UpdateConversationDto) {

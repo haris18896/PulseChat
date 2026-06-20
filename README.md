@@ -834,3 +834,35 @@ Now we need to update the `conversation.controller.ts`
 
 Applied at controller level. So all routes inside this controller are protected.
 `@CurrentUser() user` this gets the logged in user from the JWT guard
+
+at this point we have called the `/conversation` post request with the following payload
+
+```
+{
+  "participantIds": [
+    "5f7ef3ca-9900-4b7e-b95e-07ecc1630645",
+    "0b5c401e-980b-4dd0-a194-a5ca0d2e4092"
+  ],
+  "title": "Testing 001",
+  "isGroup": false
+}
+```
+
+if you have notifice the first id is our own, so our duplicate removal functionality also worked
+
+```
+[
+    Haris,
+    Haris,
+    Other User
+]
+
+this became
+
+[
+    Haris,
+    Other User
+]
+```
+
+

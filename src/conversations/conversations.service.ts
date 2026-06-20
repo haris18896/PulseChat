@@ -34,6 +34,7 @@ export class ConversationsService {
       data: {
         title: dto.title,
         isGroup: dto.isGroup ?? uniqueParticipantIds.length > 2,
+        lastMessageAt: null,
         participants: {
           create: uniqueParticipantIds.map((userId) => ({
             userId,
@@ -60,19 +61,61 @@ export class ConversationsService {
     return conversation;
   }
 
-  // findAll() {
-  //   return `This action returns all conversations`;
-  // }
-
-  // findOne(id: number) {
-  //   return `This action returns a #${id} conversation`;
-  // }
-
-  // update(id: number, updateConversationDto: UpdateConversationDto) {
-  //   return `This action updates a #${id} conversation`;
-  // }
-
-  // remove(id: number) {
-  //   return `This action removes a #${id} conversation`;
-  // }
+  getMyConversations(currentUserId: string) {
+    return this.prisma.conversation.findMany({
+      // Give me conversations where at least one participant is the current user.
+      where: {
+        participants: {
+          some: {
+            userId: currentUserId,
+          },
+        },
+      },
+      include: {
+        // Give me the participants for each conversation.
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
+        // Give me the last message for each conversation.
+        messages: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+          include: {
+            sender: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [
+        // Give me the conversations with the most recent last message. and empty conversations should be at the bottom.
+        {
+          lastMessageAt: {
+            sort: 'desc',
+            nulls: 'last',
+          },
+        },
+        // if no last message, give me the most recent created conversations.
+        {
+          createdAt: 'desc',
+        },
+      ],
+    });
+  }
 }
