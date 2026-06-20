@@ -1,8 +1,9 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -31,5 +32,21 @@ export class MessagesController {
     @Body() dto: CreateMessageDto,
   ) {
     return this.messagesService.createMessage(user.id, dto);
+  }
+
+  @Get(':conversationId')
+  @ApiOperation({ summary: 'Get messages by conversation ID' })
+  @ApiOkResponse({
+    description: 'Messages fetched successfully',
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
+  getMessagesByConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.messagesService.getMessagesByConversation(
+      user.id,
+      conversationId,
+    );
   }
 }

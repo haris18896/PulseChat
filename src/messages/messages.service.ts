@@ -56,4 +56,37 @@ export class MessagesService {
 
     return message;
   }
+
+  async getMessagesByConversation(
+    currentUserId: string,
+    conversationId: string,
+  ) {
+    const participant = await this.prisma.conversationParticipant.findFirst({
+      where: {
+        conversationId,
+        userId: currentUserId,
+      },
+    });
+
+    if (!participant) {
+      throw new ForbiddenException(
+        'You are not a participant of this conversation',
+      );
+    }
+
+    return this.prisma.message.findMany({
+      where: {
+        conversationId,
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+      },
+    });
+  }
 }
