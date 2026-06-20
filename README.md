@@ -200,7 +200,9 @@ nest g module prisma # src/prisma/prisma.module.ts
 nest g service prisma # src/prisma/prisma.service.ts
 ```
 
-## Authentication
+## Phase 1 - Authentication and Jwt Guards
+
+### Authentication
 
 - Registration Flow
 
@@ -306,7 +308,7 @@ nest g service auth
 - `src/auth/types/jwt-payload.type.ts`
 - `src/auth/guards/jwt-auth.guards.ts`
 - `src/auth/decorators/current-user.decorator.ts`
- - - with out this decorator 
+- - with out this decorator
 
 ```sh
 Client sends token
@@ -323,3 +325,343 @@ Guard attaches user to request
         ↓
 Controller returns current user
 ```
+
+## Phase 2 - Conversation & Message Data Model
+
+By the end of this phase, we will have:
+
+- ✅ Conversation database schema
+- ✅ Message database schema
+- ✅ Conversation participants
+- ✅ Prisma relationships
+- ✅ Migration
+- ✅ Prisma Studio verification
+- ✅ First Conversation APIs (REST)
+- ✅ Swagger documentation
+
+Notice that we are still NOT touching Socket.IO.
+Why?
+Because Realtime is just a transport layer.
+If your database and business logic are poorly designed, Socket.IO will only make those problems happen faster.
+
+## The Big Picture
+
+Imagine WhatsApp. You don't actually send a message directly to another user. The message belongs to a Conversation, not directly to another user.
+
+```sh
+You
+ │
+ │  "Hello"
+ ▼
+Conversation
+ │
+ ├── User A
+ ├── User B
+ │
+ ▼
+Message
+```
+
+Why?
+
+Because tomorrow you may have:
+
+```
+You
+Ahmed
+Ali
+Sara
+```
+
+All in one conversation. If a message belonged to a receiver instead:
+
+```
+Message
+--------
+senderId
+receiverId
+```
+
+It completely breaks group chats.
+Instead:
+
+```
+Conversation
+      │
+      ▼
+Participants
+      │
+      ▼
+Messages
+```
+
+This scales forever
+
+## Database Design
+
+We'll create three new tables.
+
+1. User -> this table already exist
+2. Conversation -> Represents a chat
+3. ConversationParticipant -> this connects Users and Conversations
+4. Message -> this Stores every message ever sent
+
+```
+Conversation 1
+
+↓
+
+Haris
+
+↓
+
+Ali
+```
+
+## Final Relationship
+
+This is a classic many-to-many relationship.
+
+```
+User
+│
+├──────────────┐
+│              │
+│              ▼
+│     ConversationParticipant
+│              │
+│              ▼
+│       Conversation
+│              │
+│              ▼
+└────────── Message
+```
+
+## Why We Need a Join Table
+
+Question: Why not simply do:
+
+```
+Conversation
+
+users[]
+```
+
+Because relational databases don't store arrays of foreign keys well.
+
+Instead we normalize the data.
+
+Example:
+
+Conversation
+
+```
+id
+1
+```
+
+ConversationParticipant
+
+```
+conversationId     userId
+1                   Haris
+1                   Ali
+1                   Ahmed
+```
+
+Now we can have:
+
+```
+2 users
+10 users
+500 users
+```
+
+No schema changes.
+
+## Messages
+
+Every message belongs to:
+
+- one sender
+- one conversation
+  Message
+
+```
+id
+conversationId
+senderId
+content
+createdAt
+```
+
+Notice: No receiverId.
+
+The conversation already knows who the participants are.
+
+## What About Read Receipts?
+
+Not yet.
+
+We'll add those later.
+
+This is exactly how professional software is built:
+
+```
+Version 1
+
+Conversation
+Participants
+Messages
+```
+
+Later:
+
+```
+Version 2
+
+Read Receipts
+
+Typing
+
+Presence
+
+Pinned Messages
+
+Attachments
+
+Message Reactions
+```
+
+Each feature gets its own migration.
+
+## Why Aren't We Storing Online Status?
+
+Because online status is temporary.
+
+Database:
+
+```
+User
+
+online = true
+```
+
+That is `Bad`.
+
+Suppose the server crashes.
+
+Everyone remains: `online = true`
+
+Wrong.
+
+Instead:
+
+Redis
+
+```
+user:123
+
+online
+```
+
+Redis stores temporary state.
+
+Postgres stores permanent state.
+
+This separation is one of the most important architectural concepts you'll learn.
+
+## Folder Strucutre
+
+After this phase, your project will begin to grow into a real backend.
+
+```
+src
+│
+├── auth
+├── users
+├── prisma
+├── redis
+│
+├── conversations
+│     ├── dto
+│     ├── conversation.controller.ts
+│     ├── conversation.service.ts
+│     ├── conversation.module.ts
+│
+└── messages
+      ├── dto
+      ├── message.controller.ts
+      ├── message.service.ts
+      ├── message.module.ts
+```
+
+Notice something.
+
+We are organizing by feature, not by file type.
+
+This is the architecture used in most mature NestJS applications because each feature owns its controller, service, DTOs, and related logic.
+
+## Phase 2 Roadmap
+
+We'll break this into small learning steps, just like we did with authentication.
+
+#### Step 1 — Database Design (Prisma)
+
+- Add `Conversation`
+- Add `ConversationParticipant`
+- Add `Message`
+- Explain every relationship
+- Run migration
+- Verify in Prisma Studio
+
+#### Step 2 — Conversation Module
+
+- Generate module
+- Service
+- Controller
+- Swagger setup
+
+#### Step 3 — Create Conversation
+
+`POST /conversations`
+
+Learn:
+
+- Business logic
+- Transactions
+- Duplicate conversation prevention
+
+#### Step 4 — Get My Conversations
+
+`GET /conversations`
+
+Learn:
+
+- Prisma relations
+- Includes
+- Filtering
+- Sorting
+
+#### Step 5 — Conversation Details
+
+`GET /conversations/:id`
+
+Learn:
+
+- Authorization
+- Membership checks
+- Nested queries
+
+#### Step 6 — Message APIs (REST)
+
+`POST /messages`
+
+`GET /messages/:conversationId`
+
+Learn:
+
+- Pagination
+- Ordering
+- Sender relationships
+
