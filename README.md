@@ -1099,3 +1099,15 @@ socket.on('conversation_Joined', (data) => {
 // ..............
 // ..............
 ```
+
+## Phase 3 - Step 3 - Socket send_message
+
+- this event will
+
+```
+receive socket message
+→ verify user is participant
+→ save message in Postgres
+→ update conversation.lastMessageAt
+→ emit new_message to conversation room
+```

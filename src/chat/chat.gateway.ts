@@ -1,20 +1,27 @@
-import { JwtService } from '@nestjs/jwt';
+// Third Party Modules
 import {
-  ConnectedSocket,
   MessageBody,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
-  SubscribeMessage,
+  ConnectedSocket,
   WebSocketGateway,
+  SubscribeMessage,
   WebSocketServer,
+  OnGatewayDisconnect,
+  OnGatewayConnection,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import { UsersService } from 'src/users/users.service';
-import type { AuthenticatedSocket } from './types/authenticated-user.type';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-import { JwtPayload } from 'src/auth/types/auth.type';
+
+// -- Services
+import { JwtService } from '@nestjs/jwt';
+import { UsersService } from 'src/users/users.service';
+import { MessagesService } from 'src/messages/messages.service';
 import { ConversationsService } from 'src/conversations/conversations.service';
+
+// -- Types & Dtos
+import { JwtPayload } from 'src/auth/types/auth.type';
+import { SendMessageDto } from './dto/send-message.dto';
 import { JoinConversationDto } from './dto/join-conversation.dto';
+import type { AuthenticatedSocket } from './types/authenticated-user.type';
 
 // This creates a socket.io namespace for the /chat
 @WebSocketGateway({
@@ -31,6 +38,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
+    private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
   ) {}
 
@@ -142,6 +150,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         room,
         joined: true,
       },
+    };
+  }
+
+  @SubscribeMessage('send_message')
+  async handleSendMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: SendMessageDto,
+  ) {
+    if (!client.user) {
+      throw new UnauthorizedException('Not Authenticated yet');
+    }
+
+    // reuse the REST logic for creating the message, rather than duplicating the logic
+    const message = await this.messagesService.createMessage(client.user.id, {
+      conversationId: body.conversationId,
+      content: body.content,
+    });
+
+    const room = `conversation-${body.conversationId}`;
+
+    this.server.to(room).emit('new_message', message);
+
+    return {
+      event: 'message_Sent',
+      data: message,
     };
   }
 }
