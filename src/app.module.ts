@@ -19,6 +19,7 @@ import { RedisModule } from './redis/redis.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { MessagesModule } from './messages/messages.module';
 import { ConversationsModule } from './conversations/conversations.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { ConversationsModule } from './conversations/conversations.module';
     AuthModule,
     ConversationsModule,
     MessagesModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [

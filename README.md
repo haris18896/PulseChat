@@ -200,7 +200,11 @@ nest g module prisma # src/prisma/prisma.module.ts
 nest g service prisma # src/prisma/prisma.service.ts
 ```
 
-## Phase 1 - Authentication and Jwt Guards
+---
+
+---
+
+# Phase 1 - Authentication and Jwt Guards
 
 ### Authentication
 
@@ -326,7 +330,11 @@ Guard attaches user to request
 Controller returns current user
 ```
 
-## Phase 2 - Conversation & Message Data Model
+---
+
+---
+
+# Phase 2 - Conversation & Message Data Model
 
 By the end of this phase, we will have:
 
@@ -950,7 +958,7 @@ const messages = await this.prisma.message.findMany({
 });
 
 const hasNextPage = messages.length > limit;
-const items = hasNextPage ? messages.slice(0, limit) : messages;
+const items = hasNextPage ? messages.slice(0, limit) : messagescur;
 const nextCursor = hasNextPage ? items[items.length - 1].id : null;
 
 return {
@@ -960,4 +968,69 @@ return {
     hasNextPage,
   },
 };
+```
+
+---
+
+---
+
+# Phase 3 - Scoket.io Gateway
+
+- We’ll start with the simplest Socket.IO gateway first, then gradually add JWT auth, rooms, Redis adapter, and message broadcasting
+  By the end of this step, we will have:
+
+```
+Socket.IO server running
+Client can connect
+Server logs connection/disconnection
+Client can send ping event
+Server replies with pong event
+```
+
+- No JWT yet. No chat rooms yet. No Redis adapter yet.
+
+```sh
+yarn add @nestjs/websockets @nestjs/platform-socket.io socket.io
+# socket.io-client only for local testing
+yarn add -D socket.io-client
+nest g module chat
+nest g gateway chat
+```
+
+- create the `chat.gateway.ts` and add the connection, disconnect and ping handlers
+- create the `socket-test.ts` and install the `tsx` if its not installed
+
+```sh
+yarn add -D tsx
+# run the code
+yarn start:dev
+# run the socket-test in separate terminal
+npx tsx socket-test.ts
+```
+
+- at this point our socket-io server is alive and event round trip is working fine
+- now we need to add the JWT for scoket.io
+
+```sh
+npx tsx socket-test.ts
+# Connected to server
+# Pong received from server {
+#   socketId: 'OyVKTx92Hf40k6bHAAAB',
+#   message: 'Hello from test client',
+#   timestamp: '2026-06-21T09:20:30.490Z'
+# }
+```
+
+## Phase 3 - Step 1 - JWT Authentication for Scoket.io
+
+```
+Socket connects
+        ↓
+Sends JWT token
+        ↓
+Gateway verifies token
+        ↓
+Gateway attaches user to socket
+        ↓
+Only authenticated users can connect
 ```
