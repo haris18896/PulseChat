@@ -1,7 +1,9 @@
 import { io } from 'socket.io-client';
 
 const token =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1ZjdlZjNjYS05OTAwLTRiN2UtYjk1ZS0wN2VjYzE2MzA2NDUiLCJlbWFpbCI6ImhhcmlzQHlvcG1haWwuY29tIiwiaWF0IjoxNzgyMDM0ODQxLCJleHAiOjE3ODI2Mzk2NDF9.5keR46sGei_I7garPNgLdx3VnXb8WwPxvsu2B4Qysd0';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1ZjdlZjNjYS05OTAwLTRiN2UtYjk1ZS0wN2VjYzE2MzA2NDUiLCJlbWFpbCI6ImhhcmlzQHlvcG1haWwuY29tIiwiaWF0IjoxNzgyMDQzMzMzLCJleHAiOjE3ODI2NDgxMzN9.pSBLPcYGSgtV0GMVbbGSH7wt2_utQwUR9Pz0O175KRo';
+
+const conversationId = '60c7fbb1-1616-4d85-8722-200f1765a1c5';
 
 const socket = io('http://localhost:3000/chat', {
   transports: ['websocket'],
@@ -15,13 +17,13 @@ socket.on('connect', () => {
 });
 
 socket.on('authenticated', () => {
-  socket.emit('ping', {
-    message: 'Hello from authenticated socket client',
+  socket.emit('join_conversation', {
+    conversationId,
   });
 });
 
-socket.on('pong', (data) => {
-  console.log('Pong received from server', data);
+socket.on('conversation_Joined', (data) => {
+  console.log('Conversation joined', data);
 });
 
 socket.on('connect_error', (error) => {

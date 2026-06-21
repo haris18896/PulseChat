@@ -173,4 +173,21 @@ export class ConversationsService {
 
     return conversation;
   }
+
+  async isUserParticipant(
+    userId: string,
+    conversationId: string,
+  ): Promise<boolean> {
+    const participant = await this.prisma.conversationParticipant.findFirst({
+      where: {
+        conversationId,
+        userId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return Boolean(participant);
+  }
 }

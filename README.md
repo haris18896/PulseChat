@@ -1034,3 +1034,68 @@ Gateway attaches user to socket
         ↓
 Only authenticated users can connect
 ```
+
+## Phase 3 - step 2 - Join Conversation room
+
+- we will add socket event `join_conversation`
+- we will add the dto for the `join-conversation.dto.ts`
+- now we need to add service to check "Is this user inside this conversation?" `isUserParticipant` in the `conversation.service.ts`
+- Import the `conversation` module into the chat module
+- update the chat gateway
+
+```ts
+import { io } from 'socket.io-client';
+
+const token =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1ZjdlZjNjYS05OTAwLTRiN2UtYjk1ZS0wN2VjYzE2MzA2NDUiLCJlbWFpbCI6ImhhcmlzQHlvcG1haWwuY29tIiwiaWF0IjoxNzgyMDQzMzMzLCJleHAiOjE3ODI2NDgxMzN9.pSBLPcYGSgtV0GMVbbGSH7wt2_utQwUR9Pz0O175KRo';
+
+const conversationId = '60c7fbb1-1616-4d85-8722-200f1765a1c5';
+
+const socket = io('http://localhost:3000/chat', {
+  transports: ['websocket'],
+  auth: {
+    token,
+  },
+});
+
+socket.on('connect', () => {
+  console.log('Connected to server:', socket.id);
+});
+
+socket.on('authenticated', () => {
+  socket.emit('ping', {
+    message: 'Hello from authenticated socket client',
+  });
+});
+
+socket.on('pong', (data) => {
+  console.log('Pong received from server', data);
+});
+
+socket.on('connect_error', (error) => {
+  console.error('Connection error', error);
+});
+
+socket.on('disconnect', (reason) => {
+  console.log('Disconnected from server', reason);
+});
+```
+
+- now we need to update the `socket-test.ts` from using dummy data to use the actual room conversation
+
+```ts
+// ..............
+// ..............
+// ..............
+socket.on('authenticated', () => {
+  socket.emit('join_conversation', {
+    conversationId,
+  });
+});
+
+socket.on('conversation_Joined', (data) => {
+  console.log('Conversation joined', data);
+});
+// ..............
+// ..............
+```

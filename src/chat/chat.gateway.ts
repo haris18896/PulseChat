@@ -11,8 +11,10 @@ import {
 import { Server } from 'socket.io';
 import { UsersService } from 'src/users/users.service';
 import type { AuthenticatedSocket } from './types/authenticated-user.type';
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { JwtPayload } from 'src/auth/types/auth.type';
+import { ConversationsService } from 'src/conversations/conversations.service';
+import { JoinConversationDto } from './dto/join-conversation.dto';
 
 // This creates a socket.io namespace for the /chat
 @WebSocketGateway({
@@ -29,6 +31,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
+    private readonly conversationsService: ConversationsService,
   ) {}
 
   private extractTokennFromHandshake(
@@ -104,6 +107,40 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         user: client.user,
         message: body.message,
         timestamp: new Date().toISOString(),
+      },
+    };
+  }
+
+  @SubscribeMessage('join_conversation') // server listens to this event
+  async handleJoinConversation(
+    @ConnectedSocket() client: AuthenticatedSocket, // this is the socket instance
+    @MessageBody() body: JoinConversationDto, // this is the data sent by the client
+  ) {
+    if (!client.user) {
+      throw new UnauthorizedException('Not Authenticated yet');
+    }
+
+    const isParticipant = await this.conversationsService.isUserParticipant(
+      client.user.id,
+      body.conversationId,
+    );
+
+    if (!isParticipant) {
+      throw new ForbiddenException(
+        'You are not a participant of this conversation',
+      );
+    }
+
+    const room = `conversation-${body.conversationId}`;
+
+    await client.join(room);
+
+    return {
+      event: 'conversation_Joined',
+      data: {
+        conversationId: body.conversationId,
+        room,
+        joined: true,
       },
     };
   }
