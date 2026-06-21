@@ -6,5 +6,5 @@
     "resolvePackageJsonExports": false,
     "incremental": false
   },
-  "include": ["src/**/*", "test/**/*", "prisma.config.ts", "socket-test.ts"]
+  "include": ["src/**/*", "test/**/*", "prisma.config.ts", "socket-tests/**/*"]
 }

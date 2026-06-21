@@ -1063,8 +1063,8 @@ socket.on('connect', () => {
 });
 
 socket.on('authenticated', () => {
-  socket.emit('ping', {
-    message: 'Hello from authenticated socket client',
+  socket.emit('join_conversation', {
+    conversationId,
   });
 });
 
@@ -1094,7 +1094,28 @@ socket.on('authenticated', () => {
 });
 
 socket.on('conversation_Joined', (data) => {
-  console.log('Conversation joined', data);
+  console.log('here is the conversation data : ', data);
+
+  socket.emit('send_message', {
+    conversationId,
+    content: 'Testing the new message event',
+  });
+});
+
+socket.on('message_Sent', (data) => {
+  console.log('Message sent successfully: ', data);
+});
+
+socket.on('new_message', (data) => {
+  console.log('New message received: ', data);
+});
+
+socket.on('connect_error', (error) => {
+  console.error('Connection error', error);
+});
+
+socket.on('disconnect', (reason) => {
+  console.log('Disconnected from server', reason);
 });
 // ..............
 // ..............
