@@ -21,10 +21,18 @@ socket.on('authenticated', () => {
 socket.on('conversation_Joined', (data) => {
   console.log('Client B joined conversation:', data);
 
-  socket.emit('send_message', {
-    conversationId,
-    content: 'Testing the new message event',
+  socket.on('user_typing_start', (data) => {
+    console.log('User is typing...', data);
   });
+
+  socket.on('user_typing_stop', (data) => {
+    console.log('User stopped typing...', data.userId);
+  });
+
+  //   socket.emit('send_message', {
+  //     conversationId,
+  //     content: 'Testing the new message event',
+  //   });
 });
 
 socket.on('message_Sent', (data) => {

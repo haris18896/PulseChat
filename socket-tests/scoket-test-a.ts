@@ -21,10 +21,15 @@ socket.on('authenticated', () => {
 socket.on('conversation_Joined', (data) => {
   console.log('Client A joined conversation:', data);
 
-  socket.emit('send_message', {
+  socket.emit('typing_start', {
     conversationId,
-    content: 'Testing the new message event',
   });
+
+  setTimeout(() => {
+    socket.emit('typing_stop', {
+      conversationId,
+    });
+  }, 3000);
 });
 
 socket.on('message_Sent', (data) => {

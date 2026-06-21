@@ -9,7 +9,11 @@ import {
   OnGatewayConnection,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 
 // -- Services
 import { JwtService } from '@nestjs/jwt';
@@ -48,6 +52,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const token = client.handshake.auth.token;
 
     return typeof token === 'string' ? token : undefined;
+  }
+
+  private async validateConversation(clientId: string, conversationId: string) {
+    const isParticipant = await this.conversationsService.isUserParticipant(
+      clientId,
+      conversationId,
+    );
+
+    if (!isParticipant) {
+      throw new ForbiddenException(
+        'You are not a participant of this conversation',
+      );
+    }
+
+    return true;
   }
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -175,6 +194,62 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return {
       event: 'message_Sent',
       data: message,
+    };
+  }
+
+  @SubscribeMessage('typing_start')
+  async handleTypingStart(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: JoinConversationDto,
+  ) {
+    if (!client.user) {
+      throw new UnauthorizedException('Socket is not authenticated');
+    }
+
+    await this.validateConversation(client.user.id, body.conversationId);
+
+    const room = `conversation-${body.conversationId}`;
+
+    // This sends the event to everyone in the room except the sender.
+    client.to(room).emit('user_typing_start', {
+      conversationId: body.conversationId,
+      userId: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'typing_start_sent',
+      data: {
+        conversationId: body.conversationId,
+      },
+    };
+  }
+
+  @SubscribeMessage('typing_stop')
+  async handleTypingStop(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: JoinConversationDto,
+  ) {
+    if (!client.user) {
+      throw new UnauthorizedException('Socket is not authenticated');
+    }
+
+    await this.validateConversation(client.user.id, body.conversationId);
+
+    const room = `conversation-${body.conversationId}`;
+
+    // This sends the event to everyone in the room except the sender.
+    client.to(room).emit('user_typing_stop', {
+      conversationId: body.conversationId,
+      userId: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'typing_stop_sent',
+      data: {
+        conversationId: body.conversationId,
+      },
     };
   }
 }

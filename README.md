@@ -1132,3 +1132,50 @@ receive socket message
 → update conversation.lastMessageAt
 → emit new_message to conversation room
 ```
+
+## Phase 3 - Step 4 - Typing Indicators
+
+- We will add two socket events
+- When User A starts typing, User B receives `user_typing_start`
+- When User A stops typing, User B receives `user_typing_stop`
+
+```
+typing_start
+typing_stop
+```
+
+- for testing add the below to the test - a
+
+```ts
+// ............
+// ............
+// ............
+socket.on('conversation_Joined', (data) => {
+  console.log('Client A joined conversation:', data);
+
+  socket.emit('typing_start', {
+    conversationId,
+  });
+
+  setTimeout(() => {
+    socket.emit('typing_stop', {
+      conversationId,
+    });
+  }, 3000);
+});
+// ............
+// ............
+// ............
+```
+
+- and add this to the test- b
+
+```ts
+// ............
+// ............
+// ............
+
+// ............
+// ............
+// ............
+```
