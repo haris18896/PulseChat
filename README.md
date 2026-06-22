@@ -610,6 +610,138 @@ We are organizing by feature, not by file type.
 
 This is the architecture used in most mature NestJS applications because each feature owns its controller, service, DTOs, and related logic.
 
+## Adding Loggers
+
+- There are 2 options
+
+### Option A
+
+- install pacakges `yarn add winston nest-winston` for fastify add this as well `yarn add nestjs-pino pino-http pino-pretty`
+- create the `src/common/logger/logger.service.ts`
+
+```ts
+import { Injectable, LoggerService, Scope } from '@nestjs/common';
+import { createLogger, format, transports, Logger } from 'winston';
+
+const { combine, timestamp, printf, colorize, errors } = format;
+
+const logFormat = printf(
+  ({ level, message, timestamp, stack, context, ...meta }) => {
+    const ctx = context ? `[${context}]` : '';
+    const err = stack ? `\n${stack}` : '';
+    const extra = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+    return `${timestamp} ${level} ${ctx} ${message}${extra}${err}`;
+  },
+);
+
+@Injectable({ scope: Scope.DEFAULT })
+export class AppLogger implements LoggerService {
+  private readonly logger: Logger;
+  private context?: string;
+
+  constructor() {
+    this.logger = createLogger({
+      level: process.env.LOG_LEVEL || 'debug',
+      format: combine(
+        errors({ stack: true }),
+        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+      ),
+      transports: [
+        // Console: colorized for human reading
+        new transports.Console({
+          format: combine(
+            colorize({ all: true }),
+            timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+            logFormat,
+          ),
+        }),
+        // File: structured JSON for parsing/shipping
+        new transports.File({
+          filename: 'logs/error.log',
+          level: 'error',
+          format: combine(timestamp(), format.json()),
+        }),
+        new transports.File({
+          filename: 'logs/combined.log',
+          format: combine(timestamp(), format.json()),
+        }),
+      ],
+    });
+  }
+
+  setContext(context: string): this {
+    this.context = context;
+    return this;
+  }
+
+  log(message: string, context?: string) {
+    this.logger.info(message, { context: context ?? this.context });
+  }
+
+  error(message: string, trace?: string, context?: string) {
+    this.logger.error(message, {
+      context: context ?? this.context,
+      stack: trace,
+    });
+  }
+
+  warn(message: string, context?: string) {
+    this.logger.warn(message, { context: context ?? this.context });
+  }
+
+  debug(message: string, context?: string) {
+    this.logger.debug(message, { context: context ?? this.context });
+  }
+
+  verbose(message: string, context?: string) {
+    this.logger.verbose(message, { context: context ?? this.context });
+  }
+}
+```
+
+- Create `src/common/logger/logger.module.ts`:
+
+```ts
+import { Global, Module } from '@nestjs/common';
+import { AppLogger } from './logger.service';
+
+@Global() // 👈 makes it available everywhere without re-importing
+@Module({
+  providers: [AppLogger],
+  exports: [AppLogger],
+})
+export class LoggerModule {}
+```
+
+- import it in the `app.module.ts`
+- update the `main.ts`
+
+```ts
+// without fastify
+const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+const logger = app.get(AppLogger);
+app.useLogger(logger);
+
+// With Fastify
+const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,
+  new FastifyAdapter({ logger: false }), // 👈 disable Fastify's built-in Pino logger
+  { bufferLogs: true },
+);
+
+const logger = app.get(AppLogger);
+app.useLogger(logger);
+```
+
+- usage
+
+```ts
+import { AppLogger } from 'src/common/logger/logger.service';
+
+pubClient.on('connect', () => this.log.log('Redis pub client connected'));
+```
+
 ## Phase 2 Roadmap
 
 We'll break this into small learning steps, just like we did with authentication.
@@ -1317,3 +1449,184 @@ if (socketCount === 1) {
 
       ```
 ````
+
+# Phase 4 — Redis Adapter for Socket.IO
+
+Purpose: make realtime work across multiple backend instances.
+We will add:
+
+```
+Socket.IO Redis adapter
+Redis pub/sub clients
+custom Socket.IO adapter in NestJS
+prove message sync across instances
+```
+
+```
+Multiple Node.js instances
+        ↓
+Same Redis Pub/Sub
+        ↓
+Socket messages sync across all instances
+```
+
+Socket.IO’s Redis adapter forwards packets between multiple Socket.IO servers using Redis Pub/Sub; it does not store socket data as Redis keys. Sticky sessions are still needed later when we put instances behind NGINX
+
+```
+yarn add @socket.io/redis-adapter ioredis
+```
+
+- create `src/chat/adapters/redis-io.adapter.ts`
+  Default behavior: `Instance A only knows Instance A sockets`
+  Redis adapter behavior: `Instance A can emit to rooms containing sockets on Instance B`
+
+### Register Adapter in main.ts
+
+```ts
+// Add import:
+import { RedisIoAdapter } from './chat/adapters/redis-io.adapter';
+
+// Then after app creation and before app.listen():
+
+const redisIoAdapter = new RedisIoAdapter(app);
+await redisIoAdapter.connectToRedis();
+app.useWebSocketAdapter(redisIoAdapter);
+
+// Recommended position:
+
+app.enableShutdownHooks();
+
+const redisIoAdapter = new RedisIoAdapter(app);
+await redisIoAdapter.connectToRedis();
+app.useWebSocketAdapter(redisIoAdapter);
+
+await app.listen(port, '0.0.0.0');
+```
+
+### Cross-instance Redis Adapter test
+
+```
+Client A → backend port 3000
+Client B → backend port 3001
+
+Both join same conversation room
+
+Client A sends message
+Client B receives new_message
+```
+
+```sh
+PORT=3000 yarn start:dev
+
+# in the separate terminal run
+PORT=3001 yarn start:dev
+#  <OR>
+PORT=3001 npx nest start --watch
+```
+
+- update the `scoket-test-b.ts`
+
+Why this proves Redis Adapter
+
+Without Redis adapter:
+
+```
+Instance 3000 only knows sockets connected to 3000
+Instance 3001 only knows sockets connected to 3001
+```
+
+So this would fail:
+
+`this.server.to(room).emit('new_message', message);`
+because Client B is not connected to instance 3000.
+With Redis adapter:
+
+```
+Instance 3000 emits to room
+Redis Pub/Sub forwards event
+Instance 3001 receives event
+Client B receives new_message
+```
+
+### Important Note
+
+Presence should also sync because room events now travel through Redis adapter.
+
+But the presence socket count is already stored in Redis, so that part is also cross-instance safe.
+
+```ts
+const socket = io('http://localhost:3001/chat', {
+  transports: ['websocket'],
+  auth: { token },
+});
+```
+
+# Phase 5 — Multi-instance Docker Setup
+
+Purpose: run multiple PulseChat backend containers.
+
+We will add:
+
+```
+Dockerfile
+multiple backend instances
+shared Postgres
+shared Redis
+environment-based ports
+```
+
+# Phase 6 — NGINX Load Balancing
+
+Purpose: put 3 backend instances behind one entry point.
+
+We will add:
+
+```
+NGINX config
+WebSocket upgrade headers
+load balancing
+test clients connected to different instances
+```
+
+# Phase 7 — Production Hardening
+
+Purpose: make the backend cleaner and safer.
+
+We should add:
+
+```
+response DTOs
+better socket error handling
+validation for socket payloads
+global exception filters
+structured logging
+rate limiting improvements
+message ownership/security checks
+.env.example
+```
+
+# Phase 8 — Chat Product Features
+
+Optional but useful:
+
+```
+read receipts
+delivered status
+message edited/deleted
+unread counts
+last message preview
+group conversation management
+leave conversation
+add/remove participants
+```
+
+# Phase 9 — Testing
+
+We should add:
+
+```
+unit tests for services
+e2e tests for REST APIs
+socket integration tests
+multi-instance Redis adapter test
+```

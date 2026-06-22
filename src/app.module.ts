@@ -15,12 +15,13 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
 
 // -- Modules
 import { AuthModule } from './auth/auth.module';
+import { ChatModule } from './chat/chat.module';
 import { RedisModule } from './redis/redis.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { MessagesModule } from './messages/messages.module';
-import { ConversationsModule } from './conversations/conversations.module';
-import { ChatModule } from './chat/chat.module';
 import { PresenceModule } from './presence/presence.module';
+import { MessagesModule } from './messages/messages.module';
+import { LoggerModule } from './common/logger/logger.module';
+import { ConversationsModule } from './conversations/conversations.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { PresenceModule } from './presence/presence.module';
     MessagesModule,
     ChatModule,
     PresenceModule,
+    LoggerModule,
   ],
   controllers: [AppController],
   providers: [

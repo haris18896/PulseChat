@@ -12,6 +12,8 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { AppLogger } from './common/logger/logger.service';
+import { RedisIoAdapter } from './chat/adapters/redis-io-adapter';
 
 function parseCorsOrigins(value: string): boolean | string[] {
   if (value === '*') {
@@ -29,12 +31,14 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
-      logger: false,
       trustProxy: true,
       bodyLimit: 1_048_576,
     }),
-    { logger: ['error', 'warn', 'log'] },
+    { bufferLogs: true },
   );
+
+  const logger = app.get(AppLogger);
+  app.useLogger(logger);
 
   // Swagger configuration
   const config = new DocumentBuilder()
@@ -95,6 +99,11 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  app.enableShutdownHooks();
+  const redisIoAdapter = new RedisIoAdapter(app, logger);
+  redisIoAdapter.connectToRedis();
+  app.useWebSocketAdapter(redisIoAdapter);
 
   // Listen on port
   await app.listen(port, '0.0.0.0');
