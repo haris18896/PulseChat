@@ -12,6 +12,14 @@ socket.on('connect', () => {
   console.log('Client A connected:', socket.id);
 });
 
+socket.on('user_online', (data) => {
+  console.log('Client A user online:', data);
+});
+
+socket.on('user_offline', (data) => {
+  console.log('Client A user offline:', data);
+});
+
 socket.on('authenticated', () => {
   socket.emit('join_conversation', {
     conversationId,
