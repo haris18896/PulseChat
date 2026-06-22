@@ -11,6 +11,12 @@ services:
       - POSTGRES_DB=${DATABASE_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 10s
+      timeout: 35s
+      retries: 5
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
@@ -18,6 +24,44 @@ services:
     restart: unless-stopped
     ports:
       - '${REDIS_PORT}:6379'
+    volumes:
+      - redis_data:/data # ✅ persist Redis data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  pulsechat-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pulsechat_api
+    restart: unless-stopped
+    ports:
+      - '${PORT}:3000'
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - PORT=${PORT}
+
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - DATABASE_URL=${DATABASE_URL}
+
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+
+      - THROTTLE_TTL=${THROTTLE_TTL}
+      - THROTTLE_LIMIT=${THROTTLE_LIMIT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  redis_data:

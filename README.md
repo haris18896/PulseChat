@@ -1575,6 +1575,39 @@ shared Redis
 environment-based ports
 ```
 
+```
+Run PulseChat API as a Docker container
+connect it to existing Postgres + Redis
+prepare it for multiple backend instances
+```
+
+Phase 5 Steps
+
+1. Create .dockerignore
+2. Create Dockerfile
+3. Update docker-compose.yml
+4. Run backend inside Docker
+5. Test REST APIs
+6. Test Socket.IO from Docker backend
+7. Scale to multiple backend containers
+
+- After adding the `Dockerfile` and updating the `Docker-compose.yml` file
+
+```sh
+docker compose down
+# <OR Detached>
+docker compose up --build -d
+
+# build
+docker compose up --build
+
+# Check logs
+docker logs -f pulsechat_api
+
+# Test
+curl http://localhost:3000/health
+```
+
 # Phase 6 — NGINX Load Balancing
 
 Purpose: put 3 backend instances behind one entry point.
