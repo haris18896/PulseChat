@@ -9,6 +9,9 @@ RUN yarn install --frozen-lockfile
 
 COPY . .
 
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public"
+
+
 RUN npx prisma generate
 RUN yarn build
 
@@ -30,4 +33,4 @@ COPY --from=builder /app/generated ./generated
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "node dist/main.js"]
