@@ -1179,3 +1179,141 @@ socket.on('conversation_Joined', (data) => {
 // ............
 // ............
 ```
+
+## Phase 3 - Step 5 - Presence System with Redis
+
+We will track
+
+```
+online
+offline
+connected sockets per user
+```
+
+Why Redis?
+
+Presence is temporary.
+
+Do not save this in Postgres:
+
+`user.online = true`
+
+Because if the server crashes, users may remain incorrectly online.
+
+Redis is better for temporary state.
+
+### Presence Logic
+
+One user can have multiple sockets:
+
+```
+Haris
+ ├── Browser tab 1
+ ├── Browser tab 2
+ └── Mobile app
+```
+
+So we should not mark user offline until all sockets disconnect.
+
+### Redis Key Design
+
+For each user:
+
+`presence:user:{userId}:sockets`
+
+Example:
+
+`presence:user:5f7ef3ca-9900-4b7e-b95e-07ecc1630645:sockets`
+
+Value:
+
+Set of socket IDs
+
+Example:
+
+```
+[
+  "socket-1",
+  "socket-2"
+]
+```
+
+### Create Presence Module
+
+```
+nest g module presence
+nest g service presence
+```
+
+- in the presence service we need to add the following funcitonalites `isOnline`, `getSockets` `removeSocket` to check online status, get the total count of the online sockets and remove socket
+- then we uitilize these in the `chat` service handle connect and handle disconnect
+- Afther this we need to add `/users/online-status` api to check which users are online
+- After that we need to improve the online-offline presence broadcasting relevant to users only
+  Right now we are probably doing:
+
+`this.server.emit('user_online', ...)`
+
+That sends the event to everyone connected.
+
+Bad for production.
+
+Instead, we want:
+
+```
+When Haris comes online
+→ notify only users who share conversations with Haris
+```
+
+we need to add this funciton to the `conversation.service.ts`, This finds all conversations where this user is a participant.
+
+```ts
+async getConversationIdsForUser(userId: string): Promise<string[]> {
+    const participant = await this.prisma.conversationParticipant.findMany({
+      where: {
+        userId,
+      },
+      select: {
+        conversationId: true,
+      },
+    });
+
+    return participant.map((p) => p.conversationId);
+  }
+```
+
+Then we need to add helper method inside the chatGateway `emitPresenceToUserConversation`
+
+````ts
+// ..........
+private async emitPresenceToUserConversation(
+    userId: string,
+    event: 'user_online' | 'user_offline',
+    payload: unknown,
+  ) {
+    const conversationIds =
+      await this.conversationsService.getConversationIdsForUser(userId);
+
+    conversationIds.forEach((conversationId) => {
+      const room = `conversation-${conversationId}`;
+      this.server.to(room).emit(event, payload); // emit to only those users who are in the conversation room
+    });
+  }
+  // .................
+  // .................
+  // .................
+  // .................
+
+// in the hanleConnection and handleDisconnect
+if (socketCount === 1) {
+        await this.emitPresenceToUserConversation(
+          client.user.id,
+          'user_online',
+          {
+            user: client.user,
+            timestamp: new Date().toISOString(),
+          },
+        );
+      }
+
+      ```
+````

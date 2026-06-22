@@ -20,6 +20,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { MessagesModule } from './messages/messages.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { ChatModule } from './chat/chat.module';
+import { PresenceModule } from './presence/presence.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { ChatModule } from './chat/chat.module';
     ConversationsModule,
     MessagesModule,
     ChatModule,
+    PresenceModule,
   ],
   controllers: [AppController],
   providers: [

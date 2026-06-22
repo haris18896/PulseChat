@@ -190,4 +190,17 @@ export class ConversationsService {
 
     return Boolean(participant);
   }
+
+  async getConversationIdsForUser(userId: string): Promise<string[]> {
+    const participant = await this.prisma.conversationParticipant.findMany({
+      where: {
+        userId,
+      },
+      select: {
+        conversationId: true,
+      },
+    });
+
+    return participant.map((p) => p.conversationId);
+  }
 }

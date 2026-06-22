@@ -18,6 +18,7 @@ import {
 // -- Services
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from 'src/users/users.service';
+import { PresenceService } from 'src/presence/presence.service';
 import { MessagesService } from 'src/messages/messages.service';
 import { ConversationsService } from 'src/conversations/conversations.service';
 
@@ -42,6 +43,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
+    private readonly presenceService: PresenceService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
   ) {}
@@ -67,6 +69,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     return true;
+  }
+
+  private async emitPresenceToUserConversation(
+    userId: string,
+    event: 'user_online' | 'user_offline',
+    payload: unknown,
+  ) {
+    const conversationIds =
+      await this.conversationsService.getConversationIdsForUser(userId);
+
+    conversationIds.forEach((conversationId) => {
+      const room = `conversation-${conversationId}`;
+      this.server.to(room).emit(event, payload); // emit to only those users who are in the conversation room
+    });
   }
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -95,7 +111,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         updatedAt: user.updatedAt,
       };
 
-      console.log('socket connected', client.id, 'user : ', client.user.email);
+      const socketCount = await this.presenceService.getSocket(
+        client.user.id,
+        client.id,
+      );
+
+      if (socketCount === 1) {
+        await this.emitPresenceToUserConversation(
+          client.user.id,
+          'user_online',
+          {
+            user: client.user,
+            timestamp: new Date().toISOString(),
+          },
+        );
+      }
 
       client.emit('authenticated', {
         message: 'Authenticated successfully',
@@ -110,12 +140,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  handleDisconnect(client: AuthenticatedSocket) {
+  async handleDisconnect(client: AuthenticatedSocket) {
+    if (!client.user) {
+      return;
+    }
+
+    const remainingSockets = await this.presenceService.removeSocket(
+      client.user.id,
+      client.id,
+    );
+
+    if (remainingSockets === 0) {
+      await this.emitPresenceToUserConversation(
+        client.user.id,
+        'user_offline',
+        {
+          user: client.user,
+          timestamp: new Date().toISOString(),
+        },
+      );
+    }
+
     console.log(
       'Socket disconnected: ',
       client.id,
       'user : ',
-      client.user?.email ?? 'unknown user',
+      client.user.email,
     );
   }
 
