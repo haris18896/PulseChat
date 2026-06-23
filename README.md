@@ -2620,15 +2620,171 @@ when the user is not a participant.
 Optional but useful:
 
 ```
-read receipts
-delivered status
-message edited/deleted
-unread counts
-last message preview
-group conversation management
-leave conversation
-add/remove participants
+Message Statuses
+Delivered Status
+Read Receipts
+Last Message Preview
+Unread Counts
+Edit Message
+Delete Message
+Group Management
+Leave Conversation
 ```
+
+## Phase 8.1 — Message Statuses
+
+This is the foundation for almost everything else.
+
+Instead of only storing:
+
+```
+Message
+-------
+id
+content
+senderId
+createdAt
+
+We'll support:
+
+Message
+-------
+id
+content
+senderId
+
+status
+editedAt
+deletedAt
+
+createdAt
+updatedAt
+
+where
+
+SENT
+DELIVERED
+READ
+```
+
+Everything else builds on this.
+
+## Phase 8.2 — Delivered Status
+
+```
+Flow:
+
+Sender
+   │
+send_message
+   │
+Server
+   │
+save DB
+   │
+emit new_message
+   │
+Receiver joins
+   │
+Receiver ACK
+   │
+Server
+   │
+update Delivered
+   │
+broadcast status
+```
+
+## Phase 8.3 — Read Receipts
+
+After conversation opens: `mark_messages_read`
+
+```
+Server
+
+↓
+
+UPDATE Message
+SET status = READ
+
+↓
+
+broadcast
+
+messages_read
+
+```
+
+## Phase 8.4 — Last Message Preview
+
+Instead of calculating every time: `Conversation`
+
+stores
+
+```
+lastMessageId
+lastMessagePreview
+lastMessageAt
+```
+
+Conversation list becomes extremely fast.
+
+## Phase 8.5 — Unread Counts
+
+This is the first "hard" feature.
+
+There are several possible database designs.
+
+We'll choose the scalable one used by large chat systems.
+
+## Phase 8.6 — Edit Message
+
+Only sender can edit.
+
+Store `editedAt`
+
+Frontend shows `Edited`
+
+## Phase 8.7 — Delete Message
+
+Soft delete.
+
+Instead of removing row:
+
+```
+content = NULL
+
+deletedAt = now()
+```
+
+Frontend displays
+
+```
+This message was deleted
+```
+
+## Phase 8.8 — Group Management
+
+Endpoints
+
+```
+Add participant
+
+Remove participant
+
+Rename group
+
+Update avatar
+```
+
+## Phase 8.9 — Leave Conversation
+`DELETE /conversations/:id/leave`
+
+or
+
+`POST /leave`
+
+depending on API style.
 
 # Phase 9 — Testing
 
