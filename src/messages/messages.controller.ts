@@ -14,6 +14,7 @@ import type { AuthenticatedUser } from 'src/auth/types/auth.type';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { GetMessagesQueryDto } from './dto/get-messages-query.dto';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Messages')
 @ApiBearerAuth()
@@ -22,6 +23,7 @@ import { GetMessagesQueryDto } from './dto/get-messages-query.dto';
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Post()
   @ApiOperation({ summary: 'Create a new message' })
   @ApiCreatedResponse({
@@ -35,6 +37,7 @@ export class MessagesController {
     return this.messagesService.createMessage(user.id, dto);
   }
 
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
   @Get(':conversationId')
   @ApiOperation({ summary: 'Get messages by conversation ID' })
   @ApiOkResponse({

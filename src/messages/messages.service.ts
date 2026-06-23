@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { GetMessagesQueryDto } from './dto/get-messages-query.dto';
@@ -7,29 +11,42 @@ import { GetMessagesQueryDto } from './dto/get-messages-query.dto';
 export class MessagesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createMessage(currentUserId: string, dto: CreateMessageDto) {
-    // check if the current user is a participant of the conversation
+  private async ensureConversationParticipant(
+    conversationId: string,
+    userId: string,
+  ) {
     const participant = await this.prisma.conversationParticipant.findFirst({
       where: {
-        conversationId: dto.conversationId,
-        userId: currentUserId,
+        conversationId,
+        userId,
+      },
+      select: {
+        id: true,
       },
     });
 
     if (!participant) {
-      throw new ForbiddenException(
-        'You are not a participant of this conversation',
-      );
+      throw new NotFoundException('Conversation not found');
     }
 
-    // for multiple database operations, we use transactions
-    const message = await this.prisma.$transaction(async (tx) => {
-      // create the message
+    return true;
+  }
+
+  async createMessage(currentUserId: string, dto: CreateMessageDto) {
+    const content = dto.content.trim();
+
+    if (!content) {
+      throw new BadRequestException('Message content cannot be empty');
+    }
+
+    await this.ensureConversationParticipant(dto.conversationId, currentUserId);
+
+    return this.prisma.$transaction(async (tx) => {
       const createdMessage = await tx.message.create({
         data: {
           conversationId: dto.conversationId,
           senderId: currentUserId,
-          content: dto.content,
+          content,
         },
         include: {
           sender: {
@@ -42,7 +59,6 @@ export class MessagesService {
         },
       });
 
-      // update the conversation with the last message at
       await tx.conversation.update({
         where: {
           id: dto.conversationId,
@@ -54,8 +70,6 @@ export class MessagesService {
 
       return createdMessage;
     });
-
-    return message;
   }
 
   async getMessagesByConversation(
@@ -63,18 +77,7 @@ export class MessagesService {
     conversationId: string,
     query: GetMessagesQueryDto,
   ) {
-    const participant = await this.prisma.conversationParticipant.findFirst({
-      where: {
-        conversationId,
-        userId: currentUserId,
-      },
-    });
-
-    if (!participant) {
-      throw new ForbiddenException(
-        'You are not a participant of this conversation',
-      );
-    }
+    await this.ensureConversationParticipant(conversationId, currentUserId);
 
     const limit = query.limit || 20;
 

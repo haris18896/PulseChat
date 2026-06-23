@@ -10,6 +10,27 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class ConversationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async findConversationForUserOrThrow(
+    conversationId: string,
+    userId: string,
+  ) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        participants: {
+          some: {
+            userId,
+          },
+        },
+      },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+    return conversation;
+  }
+
   async createConversation(currentUserId: string, dto: CreateConversationDto) {
     const uniqueParticipantIds = [
       ...new Set([currentUserId, ...dto.participantIds]),

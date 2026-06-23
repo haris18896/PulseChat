@@ -2532,6 +2532,89 @@ A global exception filter makes REST errors predictable for frontend.
 - Rebuild the docker `docker compose --env-file .env up -d --build --scale pulsechat-api=3`
 - test it using wrong route `curl http://localhost:8080/wrong-route`
 
+## Phase 7 - Step 4 - Rate Limiting Improvements.
+
+- Goal
+
+```
+Auth endpoints → strict
+Message sending → medium
+General APIs → normal
+Health check → no limit
+```
+
+- Recommended Limits
+
+```
+/health              no throttle
+/auth/login          5 requests / minute
+/auth/register       5 requests / minute
+/messages POST       30 requests / minute
+/conversations GET   100 requests / minute
+general APIs         100 requests / minute
+```
+
+- .env -> this means normal APIs get 100 requests per minute
+
+```.env
+THROTTLE_TTL=60000
+THROTTLE_LIMIT=100
+```
+
+### Auth strict limit
+
+```ts
+// Auth Controller
+@Throttle({ default: { limit: 5, ttl: 60000 } })
+@Post('login')
+login(@Body() dto: LoginDto) {
+  return this.authService.login(dto);
+}
+
+// message Controller
+@Throttle({ default: { limit: 100, ttl: 60000 } })
+@Get(':conversationId')
+
+// app.controller
+@SkipThrottle()
+@Get('health')
+```
+
+Login/register are expensive and sensitive, so stricter.
+
+Message sending can be frequent, but should still be protected from spam.
+
+General APIs need normal protection.
+
+### Message Ownership / Security Checks
+
+We already check: `Only conversation participants can send/read messages`
+
+Now we should tighten edge cases:
+
+1. validate conversation exists
+2. prevent sending empty/whitespace messages
+3. prevent users from accessing messages outside their conversations
+4. standardize Forbidden vs NotFound
+
+Recommended security rule: `If user is not a participant, return 404 or 403?`
+
+For chat apps, I recommend 404 for conversation access: `Conversation not found`
+
+Because 403 confirms the conversation exists.
+
+So for:
+
+```
+GET /conversations/:id
+GET /messages/:conversationId
+POST /messages
+```
+
+we should return: `404 Conversation not found`
+
+when the user is not a participant.
+
 # Phase 8 — Chat Product Features
 
 Optional but useful:
