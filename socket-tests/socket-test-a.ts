@@ -55,3 +55,7 @@ socket.on('connect_error', (error) => {
 socket.on('disconnect', (reason) => {
   console.log('Client A disconnected from server', reason);
 });
+
+socket.on('exception', (error) => {
+  console.log('Socket exception:', error);
+});

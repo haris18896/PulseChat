@@ -2249,10 +2249,12 @@ means
 Your browser can do: `localhost:3000`
 
 expose
+
 ```
 expose:
   - "3000"
 ```
+
 means
 
 `Only other Docker containers may access this port.`
@@ -2301,20 +2303,488 @@ message ownership/security checks
 .env.example
 ```
 
+Recommended order:
+
+```
+socket error handling cleanup
+socket payload validation
+response DTOs
+better logs per API instance
+.env.example
+final project README/runbook
+```
+
+## Step 1 — Socket Error Handling
+
+- Right now, if something fails inside a socket event, the client may not always get a clean response.
+- We want all socket errors to look like this:
+
+```json
+{
+  "message": "You are not a participant of this conversation",
+  "code": "FORBIDDEN"
+}
+```
+
+1. Create helper `src/chat/utils/socket-error.util.ts`
+2. Replace socket exceptions in the `chat.gateways.ts` replace it like this
+
+```ts
+throw new ForbiddenException('Socket is not authenticated');
+// <!-- with the below -->
+throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+```
+
+3. Socket Payload Validation
+
+```
+Invalid socket payload
+→ rejected before business logic
+→ clean exception response
+```
+
+Example bad payload:
+
+```
+{
+  "conversationId": "wrong-id"
+}
+```
+
+Should return:
+
+```
+{
+  "message": "Validation failed",
+  "code": "VALIDATION_ERROR"
+}
+```
+
+- But Socket.IO payloads are not being validated like REST bodies unless we explicitly validate them.
+- Then use that validation in the `chat.gateway.ts`
+
+1. Create validation utility `src/chat/utils/validate-socket-payload.util.ts`
+
+- After adding the validations rebuild the docker
+
+```sh
+docker compose --env-file .env up -d --build --scale pulsechat-api=3
+```
+
+## Phase 7 - Step 2 - Strucutred Logging
+
+##### Why we don’t write files in Docker
+
+In Docker, this is bad:
+
+```
+logs/error.log
+logs/combined.log
+```
+
+Because containers are temporary. If the container restarts or is replaced, those files can disappear unless you mount volumes.
+
+Better production flow:
+
+`App logs → stdout/stderr → Docker logs → CloudWatch / ELK / Grafana / Datadog`
+
+So locally you may write files, but in Docker/production, output to console only.
+
+##### Why INSTANCE_ID matters
+
+You now have:
+
+```
+pulsechat-api-1
+pulsechat-api-2
+pulsechat-api-3
+```
+
+If an error happens, this log is not enough:
+
+User connected
+
+You need:
+
+```
+{
+  "instanceId": "pulsechat-pulsechat-api-2",
+  "msg": "User connected"
+}
+```
+
+Then you know exactly which container handled the request/socket.
+
+Inside Docker, every container already has a hostname, so we can use:
+
+```
+process.env.INSTANCE_ID || process.env.HOSTNAME
+```
+
+If INSTANCE_ID is not manually provided, Docker gives each container a unique hostname.
+
+### Install required package
+
+```sh
+yarn add nestjs-pino pino-http pino
+yarn add -D pino-pretty
+```
+
+### Replace logger module
+
+Create/Update the `src/common/logger/logger.module.ts`
+
+```ts
+import { Global, Module } from '@nestjs/common';
+import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+@Global()
+@Module({
+  imports: [
+    PinoLoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+
+        transport: !isProduction
+          ? {
+              target: 'pino-pretty',
+              options: {
+                colorize: true,
+                singleLine: true,
+                translateTime: 'yyyy-mm-dd HH:MM:ss',
+              },
+            }
+          : undefined,
+
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'res.headers["set-cookie"]',
+          ],
+          censor: '[REDACTED]',
+        },
+
+        customProps: () => ({
+          service: 'pulsechat-api',
+          instanceId:
+            process.env.INSTANCE_ID || process.env.HOSTNAME || 'local',
+          environment: process.env.NODE_ENV || 'development',
+        }),
+      },
+    }),
+  ],
+  exports: [PinoLoggerModule],
+})
+export class LoggerModule {}
+```
+
+### Remove old AppLogger
+
+You can delete or stop using:
+
+`src/common/logger/logger.service.ts`
+
+Do not use Winston for now.
+
+rebuild docker
+
+- `docker compose --env-file .env up -d --build --scale pulsechat-api=3`
+- Then run this to test the logs
+- - `docker logs -f pulsechat-pulsechat-api-3 `
+- - `docker logs --tail=30 pulsechat-pulsechat-api-1`
+
+## Phase 7 - Step 2 - Global Exception
+
+- Goal `All REST errors should return the same clean structure.`
+
+Example:
+
+```
+{
+  "success": false,
+  "statusCode": 404,
+  "message": "User not found",
+  "path": "/auth/me",
+  "timestamp": "2026-06-23T..."
+}
+```
+
+Why we need this
+
+Right now errors may look different depending on where they come from:
+
+```
+validation errors
+Prisma errors
+auth errors
+unexpected server errors
+```
+
+A global exception filter makes REST errors predictable for frontend.
+
+### Create Filter
+
+- Create `src/common/filters/http-exception.filter.ts`
+- Register that Global Exception filter in the `main.ts` like this `app.useGlobalFilters(new HttpExceptionFilter(logger));`
+- Rebuild the docker `docker compose --env-file .env up -d --build --scale pulsechat-api=3`
+- test it using wrong route `curl http://localhost:8080/wrong-route`
+
+## Phase 7 - Step 4 - Rate Limiting Improvements.
+
+- Goal
+
+```
+Auth endpoints → strict
+Message sending → medium
+General APIs → normal
+Health check → no limit
+```
+
+- Recommended Limits
+
+```
+/health              no throttle
+/auth/login          5 requests / minute
+/auth/register       5 requests / minute
+/messages POST       30 requests / minute
+/conversations GET   100 requests / minute
+general APIs         100 requests / minute
+```
+
+- .env -> this means normal APIs get 100 requests per minute
+
+```.env
+THROTTLE_TTL=60000
+THROTTLE_LIMIT=100
+```
+
+### Auth strict limit
+
+```ts
+// Auth Controller
+@Throttle({ default: { limit: 5, ttl: 60000 } })
+@Post('login')
+login(@Body() dto: LoginDto) {
+  return this.authService.login(dto);
+}
+
+// message Controller
+@Throttle({ default: { limit: 100, ttl: 60000 } })
+@Get(':conversationId')
+
+// app.controller
+@SkipThrottle()
+@Get('health')
+```
+
+Login/register are expensive and sensitive, so stricter.
+
+Message sending can be frequent, but should still be protected from spam.
+
+General APIs need normal protection.
+
+### Message Ownership / Security Checks
+
+We already check: `Only conversation participants can send/read messages`
+
+Now we should tighten edge cases:
+
+1. validate conversation exists
+2. prevent sending empty/whitespace messages
+3. prevent users from accessing messages outside their conversations
+4. standardize Forbidden vs NotFound
+
+Recommended security rule: `If user is not a participant, return 404 or 403?`
+
+For chat apps, I recommend 404 for conversation access: `Conversation not found`
+
+Because 403 confirms the conversation exists.
+
+So for:
+
+```
+GET /conversations/:id
+GET /messages/:conversationId
+POST /messages
+```
+
+we should return: `404 Conversation not found`
+
+when the user is not a participant.
+
 # Phase 8 — Chat Product Features
 
 Optional but useful:
 
 ```
-read receipts
-delivered status
-message edited/deleted
-unread counts
-last message preview
-group conversation management
-leave conversation
-add/remove participants
+Message Statuses
+Delivered Status
+Read Receipts
+Last Message Preview
+Unread Counts
+Edit Message
+Delete Message
+Group Management
+Leave Conversation
 ```
+
+## Phase 8.1 — Message Statuses
+
+This is the foundation for almost everything else.
+
+Instead of only storing:
+
+```
+Message
+-------
+id
+content
+senderId
+createdAt
+
+We'll support:
+
+Message
+-------
+id
+content
+senderId
+
+status
+editedAt
+deletedAt
+
+createdAt
+updatedAt
+
+where
+
+SENT
+DELIVERED
+READ
+```
+
+Everything else builds on this.
+
+## Phase 8.2 — Delivered Status
+
+```
+Flow:
+
+Sender
+   │
+send_message
+   │
+Server
+   │
+save DB
+   │
+emit new_message
+   │
+Receiver joins
+   │
+Receiver ACK
+   │
+Server
+   │
+update Delivered
+   │
+broadcast status
+```
+
+## Phase 8.3 — Read Receipts
+
+After conversation opens: `mark_messages_read`
+
+```
+Server
+
+↓
+
+UPDATE Message
+SET status = READ
+
+↓
+
+broadcast
+
+messages_read
+
+```
+
+## Phase 8.4 — Last Message Preview
+
+Instead of calculating every time: `Conversation`
+
+stores
+
+```
+lastMessageId
+lastMessagePreview
+lastMessageAt
+```
+
+Conversation list becomes extremely fast.
+
+## Phase 8.5 — Unread Counts
+
+This is the first "hard" feature.
+
+There are several possible database designs.
+
+We'll choose the scalable one used by large chat systems.
+
+## Phase 8.6 — Edit Message
+
+Only sender can edit.
+
+Store `editedAt`
+
+Frontend shows `Edited`
+
+## Phase 8.7 — Delete Message
+
+Soft delete.
+
+Instead of removing row:
+
+```
+content = NULL
+
+deletedAt = now()
+```
+
+Frontend displays
+
+```
+This message was deleted
+```
+
+## Phase 8.8 — Group Management
+
+Endpoints
+
+```
+Add participant
+
+Remove participant
+
+Rename group
+
+Update avatar
+```
+
+## Phase 8.9 — Leave Conversation
+`DELETE /conversations/:id/leave`
+
+or
+
+`POST /leave`
+
+depending on API style.
 
 # Phase 9 — Testing
 
