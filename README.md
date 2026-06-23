@@ -2106,6 +2106,184 @@ Reverse proxying — NGINX sits in front of your application and forwards reques
 Load balancing — distributing incoming traffic across multiple application instances.
 ```
 
+## Phase 6 — Step 2: Scale the API to Multiple Instances
+
+From this point, you'll start thinking like a Backend + Infrastructure Engineer, which is a huge skill upgrade.
+
+- By the end of this step, your architecture will look like this:
+
+```
+                    Browser
+                       │
+                       ▼
+               localhost:8080
+                       │
+                       ▼
+                   NGINX
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+   PulseChat #1   PulseChat #2   PulseChat #3
+        │              │              │
+        └──────┬───────┴───────┬──────┘
+               ▼               ▼
+           PostgreSQL        Redis
+```
+
+- Notice something important: `All three applications share the same database and the same Redis instance.`
+
+This is exactly how most production applications work.
+
+##### Before We Change Anything
+
+Let's understand how Docker Compose scaling actually works.
+
+Suppose we have this service:
+
+```
+pulsechat-api:
+  build: .
+```
+
+Normally, Compose creates: `pulsechat-api`
+
+one container.
+
+But if we execute:
+
+```sh
+docker compose up --scale pulsechat-api=3
+```
+
+Docker creates:
+
+```
+pulsechat-api-1
+
+pulsechat-api-2
+
+pulsechat-api-3
+```
+
+These are three completely independent Node.js applications.
+
+Each one has:
+
+```
+its own memory
+its own Socket.IO server
+its own event loop
+its own CPU usage
+```
+
+But they all connect to:
+
+```
+the same PostgreSQL
+the same Redis
+```
+
+##### Why We Removed ports
+
+Earlier we changed:
+
+```
+ports:
+  - "3000:3000"
+```
+
+to
+
+```
+expose:
+  - "3000"
+```
+
+Let's understand why.
+
+Suppose three applications all try:
+
+```
+API1 → 3000
+
+API2 → 3000
+
+API3 → 3000
+```
+
+Your Mac has only one port 3000.
+
+The second application immediately fails.
+
+Instead:
+
+Inside Docker
+
+```
+API1 :3000
+
+API2 :3000
+
+API3 :3000
+```
+
+No conflict.
+
+Only NGINX exposes: `localhost:8080`
+
+##### Why expose instead of ports?
+
+This is a very common interview question.
+
+ports
+
+```
+ports:
+  - "3000:3000"
+```
+
+means
+
+`Publish this port to the outside world.`
+
+Your browser can do: `localhost:3000`
+
+expose
+```
+expose:
+  - "3000"
+```
+means
+
+`Only other Docker containers may access this port.`
+
+Your browser cannot.
+
+NGINX can.
+
+This is more secure.
+
+```sh
+docker compose --env-file .env down
+docker compose --env-file .env up -d --build --scale pulsechat-api=3
+```
+
+##### Expected Problem (And Why It's Good)
+
+I actually expect the scaling to not work perfectly on the first try.
+
+Why?
+
+`Because our current NGINX configuration only knows about one backend:`
+
+`server pulsechat-api:3000;`
+
+It doesn't yet know there are three API instances.
+
+That's intentional.
+
+We're going to hit that issue, analyze it, and then fix it together. It's exactly how you'd troubleshoot this in a real production environment.
+
 # Phase 7 — Production Hardening
 
 Purpose: make the backend cleaner and safer.

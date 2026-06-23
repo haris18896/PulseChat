@@ -4,7 +4,7 @@ const token =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3ZTM1NDc4Mi02MTlkLTQ1NTYtYjBkMC1jMWQ2MjhiMGU5NDAiLCJlbWFpbCI6ImhhcmlzQHlvcG1haWwuY29tIiwiaWF0IjoxNzgyMjAwNzU5LCJleHAiOjE3ODI4MDU1NTl9.Xi3T5WboT0AT6hGiBMRLw1hZBItoDpAG9F081G12jcA';
 const conversationId = '32bf31c7-55f7-42a0-a145-dc69bc937dca';
 
-const socket = io('http://localhost:3000/chat', {
+const socket = io('http://localhost:8080/chat', {
   transports: ['websocket'],
   auth: { token },
 });
