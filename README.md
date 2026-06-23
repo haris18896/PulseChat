@@ -1606,6 +1606,12 @@ docker logs -f pulsechat_api
 
 # Test
 curl http://localhost:3000/health
+
+# if something goes wrong
+# delete every thing
+docker compose down
+docker builder prune -f
+docker compose build --no-cache && docker compose up -d && docker logs -f pulsechat_api
 ```
 
 # Phase 6 — NGINX Load Balancing

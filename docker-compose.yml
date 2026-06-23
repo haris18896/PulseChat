@@ -4,8 +4,7 @@ services:
     container_name: postgres_pulsechat
     restart: unless-stopped
     ports:
-      - '${POSTGRES_PORT}:5433'
-    env_file: .env.docker
+      - '${POSTGRES_PORT}:5432'
     environment:
       - POSTGRES_USER=${DATABASE_USER}
       - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
@@ -25,7 +24,6 @@ services:
     restart: unless-stopped
     ports:
       - '${REDIS_PORT}:6379'
-    env_file: .env.docker
     volumes:
       - redis_data:/data # ✅ persist Redis data
     healthcheck:
@@ -43,7 +41,6 @@ services:
     restart: unless-stopped
     ports:
       - '${PORT}:3000'
-    env_file: .env.docker
     environment:
       - NODE_ENV=${NODE_ENV}
       - PORT=${PORT}
