@@ -1234,7 +1234,7 @@ socket.on('conversation_Joined', (data) => {
   });
 });
 
-socket.on('message_Sent', (data) => {
+socket.on('message_sent', (data) => {
   console.log('Message sent successfully: ', data);
 });
 
@@ -1613,6 +1613,9 @@ docker compose down
 docker builder prune -f
 docker compose build --no-cache && docker compose up -d && docker logs -f pulsechat_api
 ```
+
+- after successful api calls on the docker multi-instance setup
+- test the `npx tsx sockets-tests/socket-test-a.ts`
 
 # Phase 6 — NGINX Load Balancing
 

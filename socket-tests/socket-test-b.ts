@@ -1,10 +1,10 @@
 import { io } from 'socket.io-client';
 
 const token =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwYjVjNDAxZS05ODBiLTRkZDAtYTE5NC1hNWNhMGQyZTQwOTIiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwiaWF0IjoxNzgyMDQ0NTA3LCJleHAiOjE3ODI2NDkzMDd9.9VEAOGqiFEywSP7QaDLiRxnJ0E-TyTZhTgI2vcLal5Q';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMjA2MWY3YS00OTgxLTQwMzMtYjcyNi0yZDliMWI4MzM3NGIiLCJlbWFpbCI6Im11c2FAeW9wbWFpbC5jb20iLCJpYXQiOjE3ODIyMDA4NzMsImV4cCI6MTc4MjgwNTY3M30.vKfrKDbEh6MS_U9ZguA-Kvx32Y_aFT2-fah8zyQwhkc';
 const conversationId = '60c7fbb1-1616-4d85-8722-200f1765a1c5';
 
-const socket = io('http://localhost:3001/chat', {
+const socket = io('http://localhost:3000/chat', {
   transports: ['websocket'],
   auth: { token },
 });
@@ -26,7 +26,7 @@ socket.on('authenticated', () => {
   });
 });
 
-socket.on('conversation_Joined', (data) => {
+socket.on('conversation_joined', (data) => {
   console.log('Client B joined conversation:', data);
 
   socket.on('user_typing_start', (data) => {
@@ -43,7 +43,7 @@ socket.on('conversation_Joined', (data) => {
   //   });
 });
 
-socket.on('message_Sent', (data) => {
+socket.on('message_sent', (data) => {
   console.log('Client B message sent successfully: ', data);
 });
 
