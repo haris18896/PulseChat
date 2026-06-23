@@ -23,7 +23,16 @@ socket.on('user_offline', (data) => {
 socket.on('authenticated', () => {
   socket.emit('join_conversation', {
     conversationId,
+    // conversationId: 'wrong-id',
   });
+});
+
+socket.on('exception', (error) => {
+  console.log('Socket exception:', error);
+});
+
+socket.on('unauthorized', (data) => {
+  console.log('Unauthorized:', data);
 });
 
 socket.on('conversation_joined', (data) => {

@@ -4,7 +4,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { ServerOptions } from 'http';
 import { Redis } from 'ioredis';
-import { AppLogger } from 'src/common/logger/logger.service';
+import { Logger } from 'nestjs-pino';
 
 // -- Custom Adapter for Redis
 export class RedisIoAdapter extends IoAdapter {
@@ -13,7 +13,7 @@ export class RedisIoAdapter extends IoAdapter {
 
   constructor(
     private readonly app: INestApplicationContext,
-    private readonly logger: AppLogger,
+    private readonly logger: Logger,
   ) {
     super(app); // Pass Nest Js app into adapter, becuase we need access to convifService to get the Redis host and port
   }
@@ -36,17 +36,32 @@ export class RedisIoAdapter extends IoAdapter {
     const subClient = pubClient.duplicate();
 
     pubClient.on('error', (error) => {
-      this.logger.error(error.message, error.stack, 'RedisIoAdapter');
+      this.logger.error(
+        { err: error, context: 'RedisIoAdapter' },
+        'Redis pub client error',
+      );
     });
 
     subClient.on('error', (error) => {
-      this.logger.error(error.message, error.stack, 'RedisIoAdapter');
+      this.logger.error(
+        { err: error, context: 'RedisIoAdapter' },
+        'Redis sub client error',
+      );
     });
 
     // await Promise.all([pubClient.connect(), subClient.connect()]); // no manual connection needed, because we are using the Redis client from the RedisModule
 
     // This creates the Redis adapter
     this.adapterConstructor = createAdapter(pubClient, subClient); // After this, when one node instance emits "new_message" Redis forwars that packet to other node instaces
+
+    this.logger.log(
+      {
+        context: 'RedisIoAdapter',
+        redisHost: host,
+        redisPort: port,
+      },
+      'Socket.IO Redis adapter connected',
+    );
   }
 
   createIOServer(port: number, options?: ServerOptions) {

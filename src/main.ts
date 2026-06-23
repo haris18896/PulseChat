@@ -12,8 +12,9 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { AppLogger } from './common/logger/logger.service';
 import { RedisIoAdapter } from './chat/adapters/redis-io-adapter';
+import { Logger } from 'nestjs-pino';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 function parseCorsOrigins(value: string): boolean | string[] {
   if (value === '*') {
@@ -36,8 +37,7 @@ async function bootstrap() {
     }),
     { bufferLogs: true },
   );
-
-  const logger = app.get(AppLogger);
+  const logger = app.get(Logger);
   app.useLogger(logger);
 
   // Swagger configuration
@@ -88,9 +88,6 @@ async function bootstrap() {
   // CSRF is not enabled globally: this API is stateless (JWT bearer tokens).
   // When cookie-based sessions are added, register @fastify/cookie + @fastify/csrf-protection.
 
-  // Shutdown hooks
-  app.enableShutdownHooks();
-
   // Validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
@@ -99,6 +96,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  app.useGlobalFilters(new HttpExceptionFilter(logger));
 
   app.enableShutdownHooks();
   const redisIoAdapter = new RedisIoAdapter(app, logger);

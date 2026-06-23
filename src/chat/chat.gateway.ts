@@ -9,11 +9,9 @@ import {
   OnGatewayConnection,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import {
-  Body,
-  ForbiddenException,
-  UnauthorizedException,
-} from '@nestjs/common';
+
+// -- Utils
+import { socketError } from './utils/socket-erro.utils';
 
 // -- Services
 import { JwtService } from '@nestjs/jwt';
@@ -27,6 +25,7 @@ import { JwtPayload } from 'src/auth/types/auth.type';
 import { SendMessageDto } from './dto/send-message.dto';
 import { JoinConversationDto } from './dto/join-conversation.dto';
 import type { AuthenticatedSocket } from './types/authenticated-user.type';
+import { validateSocketPayload } from './utils/validate-socket-payload.utils';
 
 // This creates a socket.io namespace for the /chat
 @WebSocketGateway({
@@ -63,8 +62,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     if (!isParticipant) {
-      throw new ForbiddenException(
+      throw socketError(
         'You are not a participant of this conversation',
+        'FORBIDDEN',
       );
     }
 
@@ -90,8 +90,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const token = this.extractTokennFromHandshake(client);
 
       if (!token) {
-        throw new UnauthorizedException(
+        throw socketError(
           'Invalid or missing authentication token',
+          'UNAUTHORIZED',
         );
       }
 
@@ -100,7 +101,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const user = await this.usersService.findById(payload.sub);
 
       if (!user) {
-        throw new UnauthorizedException('User not found');
+        throw socketError('User not found', 'UNAUTHORIZED');
       }
 
       client.user = {
@@ -193,29 +194,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket, // this is the socket instance
     @MessageBody() body: JoinConversationDto, // this is the data sent by the client
   ) {
+    const dto = await validateSocketPayload(JoinConversationDto, body);
+
     if (!client.user) {
-      throw new UnauthorizedException('Not Authenticated yet');
+      throw socketError('Not Authenticated yet', 'UNAUTHORIZED');
     }
 
     const isParticipant = await this.conversationsService.isUserParticipant(
       client.user.id,
-      body.conversationId,
+      dto.conversationId,
     );
 
     if (!isParticipant) {
-      throw new ForbiddenException(
+      throw socketError(
         'You are not a participant of this conversation',
+        'FORBIDDEN',
       );
     }
 
-    const room = `conversation-${body.conversationId}`;
+    const room = `conversation-${dto.conversationId}`;
 
     await client.join(room);
 
     return {
       event: 'conversation_Joined',
       data: {
-        conversationId: body.conversationId,
+        conversationId: dto.conversationId,
         room,
         joined: true,
       },
@@ -227,17 +231,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() body: SendMessageDto,
   ) {
+    const dto = await validateSocketPayload(SendMessageDto, body);
     if (!client.user) {
-      throw new UnauthorizedException('Not Authenticated yet');
+      throw socketError('Not Authenticated yet', 'UNAUTHORIZED');
     }
 
     // reuse the REST logic for creating the message, rather than duplicating the logic
     const message = await this.messagesService.createMessage(client.user.id, {
-      conversationId: body.conversationId,
-      content: body.content,
+      conversationId: dto.conversationId,
+      content: dto.content,
     });
 
-    const room = `conversation-${body.conversationId}`;
+    const room = `conversation-${dto.conversationId}`;
 
     this.server.to(room).emit('new_message', message);
 
@@ -252,17 +257,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() body: JoinConversationDto,
   ) {
+    const dto = await validateSocketPayload(JoinConversationDto, body);
     if (!client.user) {
-      throw new UnauthorizedException('Socket is not authenticated');
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
     }
 
-    await this.validateConversation(client.user.id, body.conversationId);
+    await this.validateConversation(client.user.id, dto.conversationId);
 
-    const room = `conversation-${body.conversationId}`;
+    const room = `conversation-${dto.conversationId}`;
 
     // This sends the event to everyone in the room except the sender.
     client.to(room).emit('user_typing_start', {
-      conversationId: body.conversationId,
+      conversationId: dto.conversationId,
       userId: client.user.id,
       timestamp: new Date().toISOString(),
     });
@@ -270,7 +276,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return {
       event: 'typing_start_sent',
       data: {
-        conversationId: body.conversationId,
+        conversationId: dto.conversationId,
       },
     };
   }
@@ -280,17 +286,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() body: JoinConversationDto,
   ) {
+    const dto = await validateSocketPayload(JoinConversationDto, body);
     if (!client.user) {
-      throw new UnauthorizedException('Socket is not authenticated');
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
     }
 
-    await this.validateConversation(client.user.id, body.conversationId);
+    await this.validateConversation(client.user.id, dto.conversationId);
 
-    const room = `conversation-${body.conversationId}`;
+    const room = `conversation-${dto.conversationId}`;
 
     // This sends the event to everyone in the room except the sender.
     client.to(room).emit('user_typing_stop', {
-      conversationId: body.conversationId,
+      conversationId: dto.conversationId,
       userId: client.user.id,
       timestamp: new Date().toISOString(),
     });
@@ -298,7 +305,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return {
       event: 'typing_stop_sent',
       data: {
-        conversationId: body.conversationId,
+        conversationId: dto.conversationId,
       },
     };
   }
