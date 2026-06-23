@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
 const token =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMjA2MWY3YS00OTgxLTQwMzMtYjcyNi0yZDliMWI4MzM3NGIiLCJlbWFpbCI6Im11c2FAeW9wbWFpbC5jb20iLCJpYXQiOjE3ODIyMDA4NzMsImV4cCI6MTc4MjgwNTY3M30.vKfrKDbEh6MS_U9ZguA-Kvx32Y_aFT2-fah8zyQwhkc';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMjA2MWY3YS00OTgxLTQwMzMtYjcyNi0yZDliMWI4MzM3NGIiLCJlbWFpbCI6Im11c2FAeW9wbWFpbC5jb20iLCJpYXQiOjE3ODIyMDExNDksImV4cCI6MTc4MjgwNTk0OX0.vGzesS5aL854BNeQn1h4T7Dnl9kORcIRMs9BS37sw84';
 const conversationId = '32bf31c7-55f7-42a0-a145-dc69bc937dca';
 
 const socket = io('http://localhost:3000/chat', {
