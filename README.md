@@ -1630,6 +1630,482 @@ load balancing
 test clients connected to different instances
 ```
 
+- Goal
+
+```
+localhost:8080
+   ↓
+NGINX
+   ↓
+pulsechat-api-1
+pulsechat-api-2
+pulsechat-api-3
+```
+
+Clients will connect to:
+
+`io('http://localhost:8080/chat')`
+
+instead of:
+
+`io('http://localhost:3000/chat')`
+
+- create `nginx/default.conf`
+- update the `docker-compose.yml` file for the nginx
+
+##### Without Nginx
+
+- without nginx, your architecture looks like this
+
+```
+                Internet
+                    │
+                    ▼
+          localhost:3000
+                    │
+                    ▼
+            NestJS Application
+           (REST + Socket.IO)
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+      PostgreSQL           Redis
+```
+
+This is perfect for development, but imagine you have:
+
+```
+20,000 users online
+5,000 sending messages
+10,000 connected via WebSockets
+```
+
+Can one NestJS process handle all of them? `No.`
+
+One Node.js process uses only one CPU core.
+
+If your machine has:
+
+```
+8 cores
+16 cores
+32 cores
+```
+
+your application is only using `one`.
+
+So the first question becomes: `How do we utilize all CPU cores?`
+
+The answer is: `Run multiple instances of the application.`
+
+- instead of this
+
+```
+             One Instance
+
+        ┌──────────────────┐
+        │  NestJS API       │
+        │  Port 3000        │
+        └──────────────────┘
+```
+
+we do this
+
+```
+             Three Instances
+
+        ┌──────────────────┐
+        │ API #1           │
+        │ Port 3001        │
+        └──────────────────┘
+
+        ┌──────────────────┐
+        │ API #2           │
+        │ Port 3002        │
+        └──────────────────┘
+
+        ┌──────────────────┐
+        │ API #3           │
+        │ Port 3003        │
+        └──────────────────┘
+```
+
+- Problem #1
+
+If the browser sends a request...
+
+Where should it go?
+
+```
+3001 ?
+
+3002 ?
+
+3003 ?
+```
+
+The browser doesn't know.
+
+That's where NGINX comes in.
+
+- Think of NGINX like a Receptionist
+
+Imagine an office.
+
+```
+Customer
+   │
+   ▼
+Receptionist
+   │
+ ┌─┴──────────────┐
+ ▼                ▼
+Employee 1    Employee 2
+```
+
+The customer never directly goes to Employee 1.
+
+He talks to the receptionist.
+
+The receptionist decides.
+
+NGINX is that receptionist.
+
+instead of
+
+```
+Browser
+   │
+   ▼
+API #1
+```
+
+we do
+
+```
+Browser
+   │
+   ▼
+NGINX
+   │
+ ┌───────┼───────────────┐
+ ▼       ▼               ▼
+API1    API2            API3
+```
+
+What is an Upstream?
+
+```
+upstream pulsechat_api_upstream {
+
+}
+```
+
+- Upsteadm is simply `A list of backend servers.` Think of it like an array.
+- in javascript it will be
+
+```js
+const servers = [api1, api2, api3];
+```
+
+- Nginx calls this: `upsteam`
+- this line `upstream pulsechat_api_upstream {...}` means `Create a backend group called: pulsechat_api_upstream`, you can call it anything like `backend`, `api`, `chat_servers`, `production_cluster`, all are valid names
+- this line `server pulsechat-api:3000;` means `inside that group` there is one server `plusechat-api at port 3000`
+- notice something intersting, we never wrote, `localhost` we wrote `pulsechat-api` why?, ebcuase Docker Comppose automaitcaly creates `DNS`, every service name becomse a hostname inside docker exactly like `google.com`, `github.com`, docker has its own internal DNS
+- later we will simply do
+
+```
+upstream pulsechat_api_upstream {
+
+    server pulsechat-api-1:3000;
+
+    server pulsechat-api-2:3000;
+
+    server pulsechat-api-3:3000;
+
+}
+```
+
+##### What does ip_hash do?
+
+- This is extremely important for WebSockets.
+  Suppose: `User A` connects.
+
+NGINX sends him to `API #2`
+
+Now he sends another request. Without `ip_hash` NGINX might send him to `API #1`
+
+The problem?
+
+His WebSocket lives on API #2.
+
+API #1 knows nothing about it.
+
+Connection breaks.
+
+- ip_hash says `Every request from the same client IP should always go to the same backend.`
+  example
+
+```
+192.168.1.15
+
+↓
+
+API #2
+
+↓
+
+API #2
+
+↓
+
+API #2
+```
+
+Always
+
+- this is called `Sticky Sessions`, Later we'll discuss why Redis Adapter makes sticky sessions less critical, but it's still a good practice.
+
+##### Server Block
+
+- This is exactly like a NestJS controller.
+  In Nest:
+
+`@Controller('users')`
+
+In NGINX
+
+```
+server {
+
+}
+```
+
+means
+
+Handle incoming HTTP requests.
+
+##### Listen
+
+`listen 80;` means listen on `port 80` inside docker
+
+- outside docker compose maps it
+
+```
+8080
+
+↓
+
+80
+```
+
+##### Location
+
+For every request.
+
+```
+/
+
+users
+
+auth
+
+chat
+
+socket.io
+
+api
+```
+
+everything
+
+##### Proxy Pass
+
+- This is the most important line. `proxy_pass http://pulsechat_api_upstream;`
+  this means `Don't handle the request yourself.` forward it
+
+Think of it like:
+
+```
+Browser
+
+↓
+
+NGINX
+
+↓
+
+API
+```
+
+NGINX doesn't generate the response.
+
+NestJS does.
+
+NGINX simply forwards the request and returns the response.
+
+##### Why these headers?
+
+proxy_set_header Host $host;
+
+Suppose browser requested
+
+chat.example.com
+
+Without forwarding the Host header,
+
+NestJS would receive
+
+localhost
+
+instead of
+
+chat.example.com
+
+So NGINX preserves the original request information.
+
+Similarly:
+
+proxy_set_header X-Real-IP $remote_addr;
+
+Without it,
+
+every request appears to come from
+
+127.0.0.1
+
+Instead,
+
+NestJS receives the user's real IP.
+
+This is very important for:
+
+```
+Rate limiting
+Logging
+Auditing
+Security
+```
+
+##### WebSocket Upgrade
+
+These two lines are the magic behind WebSockets:
+
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+
+A browser initially sends a normal HTTP request:
+
+GET /chat
+
+Then it says:
+
+"I don't want HTTP anymore. Please upgrade this connection to WebSocket."
+
+These headers tell NGINX:
+
+"Allow the protocol upgrade and keep the connection open."
+
+Without them:
+
+HTTP requests work
+Swagger works
+REST APIs work
+❌ Socket.IO fails
+
+##### Timeouts
+
+```sh
+proxy_read_timeout 3600s;
+proxy_send_timeout 3600s;
+```
+
+Normally, HTTP requests finish in milliseconds.
+
+WebSockets are different.
+
+A user may stay connected for:
+
+```
+5 minutes
+30 minutes
+2 hours
+```
+
+If NGINX had the default timeout (often 60 seconds), it would close an idle WebSocket after one minute.
+
+Setting these to one hour allows long-lived WebSocket connections.
+
+##### Why container_name is removed
+
+This is one of the most important Docker concepts.
+
+Currently:
+
+`container_name: pulsechat_api`
+
+means Docker creates exactly one container with that name.
+
+If you try to scale:
+
+docker compose up --scale pulsechat-api=3
+
+Docker attempts to create:
+
+```
+pulsechat_api
+pulsechat_api
+pulsechat_api
+```
+
+Three containers with the same name.
+
+That's impossible.
+
+By removing container_name, Docker automatically generates unique names like:
+
+```
+pulsechat-pulsechat-api-1
+pulsechat-pulsechat-api-2
+pulsechat-pulsechat-api-3
+```
+
+Now scaling becomes possible.
+
+##### Why replace ports with expose
+
+Currently:
+
+```
+ports:
+  - "3000:3000"
+```
+
+This publishes the port to your Mac.
+
+With three API containers, they can't all bind to host port 3000.
+
+Instead, use:
+
+```
+expose:
+  - "3000"
+```
+
+This keeps port 3000 available inside the Docker network only.
+
+NGINX can still reach each API container, but your host doesn't need direct access to them.
+
+Only NGINX exposes a host port (8080), becoming the single entry point.
+
+This phase introduces three foundational production concepts you'll see in almost every scalable backend:
+
+```
+Horizontal scaling — running multiple identical application instances.
+Reverse proxying — NGINX sits in front of your application and forwards requests.
+Load balancing — distributing incoming traffic across multiple application instances.
+```
+
 # Phase 7 — Production Hardening
 
 Purpose: make the backend cleaner and safer.
