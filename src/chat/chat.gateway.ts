@@ -36,6 +36,7 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { JoinConversationDto } from './dto/join-conversation.dto';
 import {
   GroupParticipantSocketDto,
+  LeaveConversationSocketDto,
   updateGroupTitleSockerDto,
 } from './dto/update-group.dto';
 
@@ -543,6 +544,37 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     return {
       event: 'group_participant_removed_ack',
+      data: result,
+    };
+  }
+
+  @SubscribeMessage('leave_conversation')
+  async handleLeaveConversation(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: LeaveConversationSocketDto,
+  ) {
+    const dto = await validateSocketPayload(LeaveConversationSocketDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const result = await this.conversationsService.leaveConversation(
+      client.user.id,
+      dto.conversationId,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    await client.leave(room);
+
+    this.server.to(room).emit('participant_left', {
+      ...result,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'participant_left_ack',
       data: result,
     };
   }

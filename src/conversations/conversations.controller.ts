@@ -121,4 +121,18 @@ export class ConversationsController {
       userId,
     );
   }
+
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  @Post(':id/leave')
+  @ApiOperation({ summary: 'Leave a group conversation' })
+  @ApiOkResponse({
+    description: 'Conversation left successfully',
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
+  leaveConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+  ) {
+    return this.conversationsService.leaveConversation(user.id, conversationId);
+  }
 }

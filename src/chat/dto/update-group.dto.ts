@@ -23,3 +23,10 @@ export class GroupParticipantSocketDto {
   @IsUUID('4')
   userId: string;
 }
+
+export class LeaveConversationSocketDto {
+  @IsUUID('4')
+  @IsString()
+  @IsNotEmpty()
+  conversationId: string;
+}

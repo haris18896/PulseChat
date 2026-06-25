@@ -405,4 +405,47 @@ export class ConversationsService {
       removed: true,
     };
   }
+
+  async leaveConversation(currentUserId: string, conversationId: string) {
+    await this.findGroupConversationForUserOrThrow(
+      conversationId,
+      currentUserId,
+    );
+
+    const participantCount = await this.prisma.conversationParticipant.count({
+      where: {
+        conversationId,
+      },
+    });
+
+    if (participantCount <= 1) {
+      throw new BadRequestException('Cannot leave the last participant');
+    }
+
+    const participant = await this.prisma.conversationParticipant.findFirst({
+      where: {
+        conversationId,
+        userId: currentUserId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    await this.prisma.conversationParticipant.delete({
+      where: {
+        id: participant.id,
+      },
+    });
+
+    return {
+      conversationId,
+      leftUserId: currentUserId,
+      left: true,
+    };
+  }
 }

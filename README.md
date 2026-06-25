@@ -2935,9 +2935,15 @@ Cannot add duplicate participant
 
 or
 
-`POST /leave`
+`POST /conversations/:id/leave`
 
 depending on API style.
+
+```
+Only participants can leave
+Only group conversations can be left
+Cannot leave if you are the last participant
+```
 
 # Phase 9 — Testing
 
