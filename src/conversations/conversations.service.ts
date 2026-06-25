@@ -292,10 +292,9 @@ export class ConversationsService {
         participants: {
           select: {
             id: true,
-            title: true,
-            isGroup: true,
-            createdAt: true,
-            updatedAt: true,
+            userId: true,
+            joinedAt: true,
+            lastReadAt: true,
           },
         },
       },
