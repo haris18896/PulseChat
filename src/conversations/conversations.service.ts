@@ -31,6 +31,29 @@ export class ConversationsService {
     return conversation;
   }
 
+  private async findGroupConversationForUserOrThrow(
+    conversationId: string,
+    userId: string,
+  ) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        isGroup: true,
+        participants: {
+          some: {
+            userId,
+          },
+        },
+      },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Group conversation not found');
+    }
+
+    return conversation;
+  }
+
   async createConversation(currentUserId: string, dto: CreateConversationDto) {
     const uniqueParticipantIds = [
       ...new Set([currentUserId, ...dto.participantIds]),
@@ -240,5 +263,146 @@ export class ConversationsService {
     });
 
     return participant.map((p) => p.conversationId);
+  }
+
+  async updateGroupTitle(
+    currentUserId: string,
+    conversationId: string,
+    title: string,
+  ) {
+    const cleanedTitle = title.trim();
+
+    if (!cleanedTitle) {
+      throw new BadRequestException('Title cannot be empty');
+    }
+
+    await this.findGroupConversationForUserOrThrow(
+      conversationId,
+      currentUserId,
+    );
+
+    return this.prisma.conversation.update({
+      where: {
+        id: conversationId,
+      },
+      data: {
+        title: cleanedTitle,
+      },
+      include: {
+        participants: {
+          select: {
+            id: true,
+            title: true,
+            isGroup: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+  }
+
+  async addParticipantToGroup(
+    currentUserId: string,
+    conversationId: string,
+    userIdToAdd: string,
+  ) {
+    await this.findGroupConversationForUserOrThrow(
+      conversationId,
+      currentUserId,
+    );
+
+    const userToAdd = await this.prisma.user.findFirst({
+      where: {
+        id: userIdToAdd,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!userToAdd) {
+      throw new NotFoundException('User not found');
+    }
+
+    const existingParticipant =
+      await this.prisma.conversationParticipant.findFirst({
+        where: {
+          conversationId,
+          userId: userIdToAdd,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    if (existingParticipant) {
+      throw new BadRequestException('User is already a participant');
+    }
+
+    return this.prisma.conversationParticipant.create({
+      data: {
+        conversationId,
+        userId: userToAdd.id,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+  }
+
+  async removeParticipantFromGroup(
+    currentUserId: string,
+    conversationId: string,
+    userIdToRemove: string,
+  ) {
+    await this.findGroupConversationForUserOrThrow(
+      conversationId,
+      currentUserId,
+    );
+
+    const participantCount = await this.prisma.conversationParticipant.count({
+      where: {
+        conversationId,
+      },
+    });
+
+    if (participantCount <= 1) {
+      throw new BadRequestException('Cannot remove the last participant');
+    }
+
+    const participant = await this.prisma.conversationParticipant.findFirst({
+      where: {
+        conversationId,
+        userId: userIdToRemove,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    await this.prisma.conversationParticipant.delete({
+      where: {
+        id: participant.id,
+      },
+    });
+
+    return {
+      conversationId,
+      removedUserId: userIdToRemove,
+      removed: true,
+    };
   }
 }

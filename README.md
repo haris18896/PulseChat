@@ -2912,6 +2912,23 @@ Rename group
 Update avatar
 ```
 
+- We will add these REST APIs first:
+
+```
+PATCH /conversations/:id/title
+POST  /conversations/:id/participants
+DELETE /conversations/:id/participants/:userId
+```
+
+- Rules
+
+```
+Only participants can manage group
+Only group conversations can be managed
+Cannot remove the last participant
+Cannot add duplicate participant
+```
+
 ## Phase 8.9 — Leave Conversation
 
 `DELETE /conversations/:id/leave`

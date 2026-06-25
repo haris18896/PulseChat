@@ -34,6 +34,10 @@ import {
 } from './dto/message.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { JoinConversationDto } from './dto/join-conversation.dto';
+import {
+  GroupParticipantSocketDto,
+  updateGroupTitleSockerDto,
+} from './dto/update-group.dto';
 
 // This creates a socket.io namespace for the /chat
 @WebSocketGateway({
@@ -446,6 +450,100 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return {
       event: 'message_deleted_ack',
       data: deletedMessage,
+    };
+  }
+
+  @SubscribeMessage('update_group_title')
+  async handleUpdateGroupTitle(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: updateGroupTitleSockerDto,
+  ) {
+    const dto = await validateSocketPayload(updateGroupTitleSockerDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const conversation = await this.conversationsService.updateGroupTitle(
+      client.user.id,
+      dto.conversationId,
+      dto.title,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    this.server.to(room).emit('group_title_updated', {
+      conversation,
+      updatedBy: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'group_title_updated_ack',
+      data: conversation,
+    };
+  }
+
+  @SubscribeMessage('add_group_participant')
+  async handleAddGroupParticipant(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: GroupParticipantSocketDto,
+  ) {
+    const dto = await validateSocketPayload(GroupParticipantSocketDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const participant = await this.conversationsService.addParticipantToGroup(
+      client.user.id,
+      dto.conversationId,
+      dto.userId,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    this.server.to(room).emit('group_participant_added', {
+      conversationId: dto.conversationId,
+      participant,
+      addedBy: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'group_participant_added_ack',
+      data: participant,
+    };
+  }
+
+  @SubscribeMessage('remove_group_participant')
+  async handleRemoveGroupParticipant(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: GroupParticipantSocketDto,
+  ) {
+    const dto = await validateSocketPayload(GroupParticipantSocketDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const result = await this.conversationsService.removeParticipantFromGroup(
+      client.user.id,
+      dto.conversationId,
+      dto.userId,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    this.server.to(room).emit('group_participant_removed', {
+      ...result,
+      removedBy: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'group_participant_removed_ack',
+      data: result,
     };
   }
 }
