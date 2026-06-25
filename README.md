@@ -2945,6 +2945,20 @@ Only group conversations can be left
 Cannot leave if you are the last participant
 ```
 
+- After everything completed make migrations locally and generate the prisma
+
+```sh
+npx prisma migrate dev --name phase_8_chat_product_features
+npx prisma generate
+
+# docker
+docker compose --env-file .env up -d --build --scale pulsechat-api=3
+
+# Confirm migration inside docker
+docker logs --tail=80 pulsechat-pulsechat-api-1
+npx prisma studio
+```
+
 # Phase 9 — Testing
 
 We should add:
