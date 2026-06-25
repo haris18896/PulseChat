@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import {
   ApiBearerAuth,
@@ -15,6 +24,7 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { GetMessagesQueryDto } from './dto/get-messages-query.dto';
 import { Throttle } from '@nestjs/throttler';
+import { UpdateMessageDto } from './dto/update-message.dto';
 
 @ApiTags('Messages')
 @ApiBearerAuth()
@@ -54,5 +64,34 @@ export class MessagesController {
       conversationId,
       query,
     );
+  }
+
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  @Patch(':messageId')
+  @ApiOperation({ summary: 'Update a message' })
+  @ApiOkResponse({
+    description: 'Message updated successfully',
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
+  updateMessage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('messageId') messageId: string,
+    @Body() dto: UpdateMessageDto,
+  ) {
+    return this.messagesService.updateMessage(user.id, messageId, dto);
+  }
+
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  @Delete(':messageId')
+  @ApiOperation({ summary: 'Delete a message' })
+  @ApiOkResponse({
+    description: 'Message deleted successfully',
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
+  deleteMessage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('messageId') messageId: string,
+  ) {
+    return this.messagesService.deleteMessage(user.id, messageId);
   }
 }

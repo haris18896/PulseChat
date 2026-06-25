@@ -20,12 +20,25 @@ import { PresenceService } from 'src/presence/presence.service';
 import { MessagesService } from 'src/messages/messages.service';
 import { ConversationsService } from 'src/conversations/conversations.service';
 
-// -- Types & Dtos
+// -- Types
 import { JwtPayload } from 'src/auth/types/auth.type';
-import { SendMessageDto } from './dto/send-message.dto';
-import { JoinConversationDto } from './dto/join-conversation.dto';
 import type { AuthenticatedSocket } from './types/authenticated-user.type';
 import { validateSocketPayload } from './utils/validate-socket-payload.utils';
+
+// -- Dtos
+import {
+  EditMessageDto,
+  MessageReadDto,
+  DeleteMessageDto,
+  MessageDeliveredDto,
+} from './dto/message.dto';
+import { SendMessageDto } from './dto/send-message.dto';
+import { JoinConversationDto } from './dto/join-conversation.dto';
+import {
+  GroupParticipantSocketDto,
+  LeaveConversationSocketDto,
+  updateGroupTitleSockerDto,
+} from './dto/update-group.dto';
 
 // This creates a socket.io namespace for the /chat
 @WebSocketGateway({
@@ -307,6 +320,262 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data: {
         conversationId: dto.conversationId,
       },
+    };
+  }
+
+  @SubscribeMessage('message_delivered')
+  async handleMessageDelivered(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: MessageDeliveredDto,
+  ) {
+    const dto = await validateSocketPayload(MessageDeliveredDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const message = await this.messagesService.markMessageDelievered(
+      client.user.id,
+      dto.conversationId,
+      dto.messageId,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    this.server.to(room).emit('message_delivered', {
+      conversationId: dto.conversationId,
+      messageId: dto.messageId,
+      timestamp: new Date().toISOString(),
+      status: message.status,
+      deliveredBy: client.user.id,
+    });
+
+    return {
+      event: 'message_delivered_ack',
+      data: {
+        conversationId: dto.conversationId,
+        messageId: dto.messageId,
+        status: message.status,
+      },
+    };
+  }
+
+  @SubscribeMessage('messages_read')
+  async handleMessagesRead(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: MessageReadDto,
+  ) {
+    const dto = await validateSocketPayload(MessageReadDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const result = await this.messagesService.markConversationMessagesRead(
+      client.user.id,
+      dto.conversationId,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    this.server.to(room).emit('messages_read', {
+      conversationId: dto.conversationId,
+      readBy: client.user.id,
+      updatedCount: result.updatedCount,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'messages_read_ack',
+      data: result,
+    };
+  }
+
+  @SubscribeMessage('edit_message')
+  async handleEditMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: EditMessageDto,
+  ) {
+    const dto = await validateSocketPayload(EditMessageDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const updatedMessage = await this.messagesService.updateMessage(
+      client.user.id,
+      dto.messageId,
+      {
+        content: dto.content,
+      },
+    );
+
+    const room = `conversation-${updatedMessage.conversationId}`;
+
+    this.server.to(room).emit('message_edited', {
+      message: updatedMessage,
+      editedBy: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'message_edited_ack',
+      data: updatedMessage,
+    };
+  }
+
+  @SubscribeMessage('delete_message')
+  async handleDeleteMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: DeleteMessageDto,
+  ) {
+    const dto = await validateSocketPayload(DeleteMessageDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const deletedMessage = await this.messagesService.deleteMessage(
+      client.user.id,
+      dto.messageId,
+    );
+
+    const room = `conversation-${deletedMessage.conversationId}`;
+
+    this.server.to(room).emit('message_deleted', {
+      message: deletedMessage,
+      deletedBy: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'message_deleted_ack',
+      data: deletedMessage,
+    };
+  }
+
+  @SubscribeMessage('update_group_title')
+  async handleUpdateGroupTitle(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: updateGroupTitleSockerDto,
+  ) {
+    const dto = await validateSocketPayload(updateGroupTitleSockerDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const conversation = await this.conversationsService.updateGroupTitle(
+      client.user.id,
+      dto.conversationId,
+      dto.title,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    this.server.to(room).emit('group_title_updated', {
+      conversation,
+      updatedBy: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'group_title_updated_ack',
+      data: conversation,
+    };
+  }
+
+  @SubscribeMessage('add_group_participant')
+  async handleAddGroupParticipant(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: GroupParticipantSocketDto,
+  ) {
+    const dto = await validateSocketPayload(GroupParticipantSocketDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const participant = await this.conversationsService.addParticipantToGroup(
+      client.user.id,
+      dto.conversationId,
+      dto.userId,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    this.server.to(room).emit('group_participant_added', {
+      conversationId: dto.conversationId,
+      participant,
+      addedBy: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'group_participant_added_ack',
+      data: participant,
+    };
+  }
+
+  @SubscribeMessage('remove_group_participant')
+  async handleRemoveGroupParticipant(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: GroupParticipantSocketDto,
+  ) {
+    const dto = await validateSocketPayload(GroupParticipantSocketDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const result = await this.conversationsService.removeParticipantFromGroup(
+      client.user.id,
+      dto.conversationId,
+      dto.userId,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    this.server.to(room).emit('group_participant_removed', {
+      ...result,
+      removedBy: client.user.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'group_participant_removed_ack',
+      data: result,
+    };
+  }
+
+  @SubscribeMessage('leave_conversation')
+  async handleLeaveConversation(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() body: LeaveConversationSocketDto,
+  ) {
+    const dto = await validateSocketPayload(LeaveConversationSocketDto, body);
+
+    if (!client.user) {
+      throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
+    }
+
+    const result = await this.conversationsService.leaveConversation(
+      client.user.id,
+      dto.conversationId,
+    );
+
+    const room = `conversation-${dto.conversationId}`;
+
+    await client.leave(room);
+
+    this.server.to(room).emit('participant_left', {
+      ...result,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      event: 'participant_left_ack',
+      data: result,
     };
   }
 }

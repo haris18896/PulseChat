@@ -1,9 +1,19 @@
-import { Controller, Post, Body, UseGuards, Get, Param } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Get,
+  Param,
+  Patch,
+  Delete,
+} from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -11,6 +21,11 @@ import {
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guards';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from 'src/auth/types/auth.type';
+import { Throttle } from '@nestjs/throttler';
+import {
+  AddParticipantDto,
+  UpdateConversationTitleDto,
+} from './dto/udpate-conversation.dto';
 
 @ApiTags('Conversations')
 @ApiBearerAuth()
@@ -50,13 +65,74 @@ export class ConversationsController {
     );
   }
 
-  // @Patch(':id')
-  // update(@Param('id') id: string, @Body() updateConversationDto: UpdateConversationDto) {
-  //   return this.conversationsService.update(+id, updateConversationDto);
-  // }
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Patch(':id/title')
+  @ApiOperation({ summary: 'Update group conversation title' })
+  @ApiOkResponse({
+    description: 'Conversation title updated successfully',
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
+  updateConversationTitle(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+    @Body() dto: UpdateConversationTitleDto,
+  ) {
+    return this.conversationsService.updateGroupTitle(
+      user.id,
+      conversationId,
+      dto.title,
+    );
+  }
 
-  // @Delete(':id')
-  // remove(@Param('id') id: string) {
-  //   return this.conversationsService.remove(+id);
-  // }
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  @Post(':id/participants')
+  @ApiOperation({ summary: 'Add participant to group conversation' })
+  @ApiOkResponse({
+    description: 'Participant added successfully',
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
+  addParticipantToGroup(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+    @Body() dto: AddParticipantDto,
+  ) {
+    return this.conversationsService.addParticipantToGroup(
+      user.id,
+      conversationId,
+      dto.userId,
+    );
+  }
+
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  @Delete(':id/participants/:userId')
+  @ApiOperation({ summary: 'Remove participant from group conversation' })
+  @ApiOkResponse({
+    description: 'Participant removed successfully',
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
+  removeParticipantFromGroup(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.conversationsService.removeParticipantFromGroup(
+      user.id,
+      conversationId,
+      userId,
+    );
+  }
+
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  @Post(':id/leave')
+  @ApiOperation({ summary: 'Leave a group conversation' })
+  @ApiOkResponse({
+    description: 'Conversation left successfully',
+  })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
+  leaveConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+  ) {
+    return this.conversationsService.leaveConversation(user.id, conversationId);
+  }
 }

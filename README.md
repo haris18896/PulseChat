@@ -2669,6 +2669,21 @@ READ
 
 Everything else builds on this.
 
+- update the `prisma/schema.prisma` and add the MessageStatus enum
+- in the `Message` model we then add `status MessageStatus @default(SENT)`, Every new message starts as SENT. Later `Receiver gets message → DELIVERED
+Receiver opens chat → READ`
+- `editedAt DateTime?` Null means message was never edited.
+- `deletedAt DateTime?` Null means message is active. If set, the message is soft-deleted.
+- We are not deleting rows because chat history needs auditability and consistency.
+
+```sh
+# Run Migrations
+docker compose --env-file .env up -d postgres redis
+
+docker compose --env-file .env run --rm pulsechat-api npx prisma migrate dev --name add_message_status_lifecycle
+npx prisma generate
+```
+
 ## Phase 8.2 — Delivered Status
 
 ```
@@ -2695,6 +2710,18 @@ update Delivered
 broadcast status
 ```
 
+- `SENT → DELIVERED`, When a receiver gets a message, their client emits: `message_delivered`
+  Then server:
+
+```
+checks participant
+checks receiver is not sender
+updates message status to DELIVERED
+broadcasts message_delivered
+```
+
+- `src/chat/dto/message-delivered.dto.ts`
+
 ## Phase 8.3 — Read Receipts
 
 After conversation opens: `mark_messages_read`
@@ -2715,6 +2742,11 @@ messages_read
 
 ```
 
+- `DELIVERED → READ`, When a user opens a conversation, the client emits: `message_read`, Then backend marks all messages in that conversation as READ, except the user’s own messages.
+- `src/chat/dto/message-read.dto.ts`
+- Add method in MessagesService `markConversationMessagesRead`
+- Add socket event in ChatGateway `handleMessagesRead`
+
 ## Phase 8.4 — Last Message Preview
 
 Instead of calculating every time: `Conversation`
@@ -2729,6 +2761,21 @@ lastMessageAt
 
 Conversation list becomes extremely fast.
 
+- Add to Prisma `Conversation`
+
+```
+lastMessageId      String?
+lastMessagePreview String?
+lastMessageAt      DateTime?
+```
+
+```sh
+docker compose --env-file .env up -d postgres redis
+
+docker compose --env-file .env run --rm pulsechat-api npx prisma migrate dev --name add_last_message_preview
+npx prisma generate
+```
+
 ## Phase 8.5 — Unread Counts
 
 This is the first "hard" feature.
@@ -2737,6 +2784,35 @@ There are several possible database designs.
 
 We'll choose the scalable one used by large chat systems.
 
+- Add this to the `ConversationParticipants`: `lastReadAt DateTime?`
+
+Why?
+
+Unread count for a user becomes:
+
+```
+messages after participant.lastReadAt
+AND senderId != currentUserId
+```
+
+- In `markConversationMessagesRead`, after `updateMany`, also update participant:
+
+```ts
+await this.prisma.conversationParticipant.update({
+  where: {
+    conversationId_userId: {
+      conversationId,
+      userId: currentUserId,
+    },
+  },
+  data: {
+    lastReadAt: new Date(),
+  },
+});
+```
+
+- Add unread count to `getMyConversations`
+
 ## Phase 8.6 — Edit Message
 
 Only sender can edit.
@@ -2744,6 +2820,42 @@ Only sender can edit.
 Store `editedAt`
 
 Frontend shows `Edited`
+
+- Goal
+
+```
+Only the sender can edit their own message.
+Deleted messages cannot be edited.
+Empty content is not allowed
+Edited messages keep the same row.
+editedAt is updated
+We update content + editedAt.
+Socket room receives message_edited event
+```
+
+- We will add `PATCH /messages/:messageId`
+- and later a socket event: `message_edited`
+- Recommended flow `REST first → then Socket.IO broadcast`
+
+##### Why this is good
+
+We are not duplicating edit logic inside the gateway.
+
+This line:
+
+`this.messagesService.updateMessage(...)`
+
+already handles:
+
+```
+sender ownership
+conversation membership
+empty content
+deleted message protection
+editedAt update
+```
+
+The gateway only handles realtime broadcasting.
 
 ## Phase 8.7 — Delete Message
 
@@ -2763,6 +2875,29 @@ Frontend displays
 This message was deleted
 ```
 
+- We’ll implement soft delete, not hard delete.
+
+```
+deletedAt = now()
+content = null or "This message was deleted"
+```
+
+- Since your current Prisma content is probably required String, we’ll keep it simple for now:
+
+```
+content = "This message was deleted"
+deletedAt = now()
+```
+
+`DELETE /messages/:messageId`
+
+```
+Only sender can delete
+Already deleted messages should not be deleted again
+Deleted messages cannot be edited
+Conversation room receives message_deleted
+```
+
 ## Phase 8.8 — Group Management
 
 Endpoints
@@ -2777,14 +2912,52 @@ Rename group
 Update avatar
 ```
 
+- We will add these REST APIs first:
+
+```
+PATCH /conversations/:id/title
+POST  /conversations/:id/participants
+DELETE /conversations/:id/participants/:userId
+```
+
+- Rules
+
+```
+Only participants can manage group
+Only group conversations can be managed
+Cannot remove the last participant
+Cannot add duplicate participant
+```
+
 ## Phase 8.9 — Leave Conversation
+
 `DELETE /conversations/:id/leave`
 
 or
 
-`POST /leave`
+`POST /conversations/:id/leave`
 
 depending on API style.
+
+```
+Only participants can leave
+Only group conversations can be left
+Cannot leave if you are the last participant
+```
+
+- After everything completed make migrations locally and generate the prisma
+
+```sh
+npx prisma migrate dev --name phase_8_chat_product_features
+npx prisma generate
+
+# docker
+docker compose --env-file .env up -d --build --scale pulsechat-api=3
+
+# Confirm migration inside docker
+docker logs --tail=80 pulsechat-pulsechat-api-1
+npx prisma studio
+```
 
 # Phase 9 — Testing
 
