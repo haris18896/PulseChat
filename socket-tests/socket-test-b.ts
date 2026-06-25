@@ -27,10 +27,6 @@ socket.on('authenticated', () => {
   });
 });
 
-socket.on('exception', (error) => {
-  console.log('Socket exception:', error);
-});
-
 socket.on('unauthorized', (data) => {
   console.log('Unauthorized:', data);
 });
@@ -42,6 +38,18 @@ socket.on('conversation_joined', (data) => {
     console.log('User is typing...', data);
   });
 
+  socket.emit('messages_read', {
+    conversationId,
+  });
+
+  socket.on('messages_read', (data) => {
+    console.log('Messages read event:', data);
+  });
+
+  socket.on('messages_read_ack', (data) => {
+    console.log('Messages read ack:', data);
+  });
+
   socket.on('user_typing_stop', (data) => {
     console.log('User stopped typing...', data.userId);
   });
@@ -50,6 +58,23 @@ socket.on('conversation_joined', (data) => {
   //     conversationId,
   //     content: 'Testing the new message event',
   //   });
+});
+
+socket.emit('edit_message', {
+  messageId: 'MESSAGE_ID',
+  content: 'Updated through socket',
+});
+
+socket.on('message_edited', (data) => {
+  console.log('Message edited:', data);
+});
+
+socket.on('message_edited_ack', (data) => {
+  console.log('Edit ack:', data);
+});
+
+socket.on('exception', (error) => {
+  console.log('Socket exception:', error);
 });
 
 socket.on('message_sent', (data) => {
@@ -66,4 +91,16 @@ socket.on('connect_error', (error) => {
 
 socket.on('disconnect', (reason) => {
   console.log('Client B disconnected from server', reason);
+});
+
+socket.emit('delete_message', {
+  messageId: 'MESSAGE_ID',
+});
+
+socket.on('message_deleted', (data) => {
+  console.log('Message deleted:', data);
+});
+
+socket.on('message_deleted_ack', (data) => {
+  console.log('Delete ack:', data);
 });

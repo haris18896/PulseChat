@@ -86,8 +86,8 @@ export class ConversationsService {
     return conversation;
   }
 
-  getMyConversations(currentUserId: string) {
-    return this.prisma.conversation.findMany({
+  async getMyConversations(currentUserId: string) {
+    const conversations = await this.prisma.conversation.findMany({
       // Give me conversations where at least one participant is the current user.
       where: {
         participants: {
@@ -112,21 +112,6 @@ export class ConversationsService {
           },
         },
         // Give me the last message for each conversation.
-        messages: {
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 1,
-          include: {
-            sender: {
-              select: {
-                id: true,
-                username: true,
-                email: true,
-              },
-            },
-          },
-        },
       },
       orderBy: [
         // Give me the conversations with the most recent last message. and empty conversations should be at the bottom.
@@ -142,6 +127,38 @@ export class ConversationsService {
         },
       ],
     });
+
+    const conversationsWithUnreadCount = await Promise.all(
+      conversations.map(async (conversation) => {
+        const currentParticipant = conversation.participants.find(
+          (p) => p.userId === currentUserId,
+        );
+
+        const unreadCount = await this.prisma.message.count({
+          where: {
+            conversationId: conversation.id,
+            senderId: {
+              not: currentUserId,
+            },
+            deletedAt: null,
+            ...(currentParticipant?.lastReadAt
+              ? {
+                  createdAt: {
+                    gt: currentParticipant.lastReadAt,
+                  },
+                }
+              : {}),
+          },
+        });
+
+        return {
+          ...conversation,
+          unreadCount,
+        };
+      }),
+    );
+
+    return conversationsWithUnreadCount;
   }
 
   async getConversationById(currentUserId: string, conversationId: string) {
