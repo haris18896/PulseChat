@@ -478,11 +478,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
     }
 
-    const conversation = await this.conversationsService.updateGroupTitle(
-      client.user.id,
-      dto.conversationId,
-      dto.title,
-    );
+    const conversation =
+      await this.conversationsService.updateConversationTitle(
+        client.user.id,
+        dto.conversationId,
+        dto.title,
+      );
 
     const room = `conversation-${dto.conversationId}`;
 

@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Delete,
+  BadRequestException,
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
@@ -40,7 +41,7 @@ export class ConversationsController {
     description: 'Conversation created successfully',
   })
   @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
-  createConversation(
+  async createConversation(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateConversationDto,
   ) {
@@ -49,17 +50,17 @@ export class ConversationsController {
 
   @Get()
   @ApiOperation({ summary: 'Get my conversations' })
-  getMyConversations(@CurrentUser() user: AuthenticatedUser) {
+  async getMyConversations(@CurrentUser() user: AuthenticatedUser) {
     return this.conversationsService.getMyConversations(user.id);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get conversation details' })
-  getConversationById(
+  async getConversationById(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') conversationId: string,
   ) {
-    return this.conversationsService.getConversationById(
+    return await this.conversationsService.getConversationById(
       user.id,
       conversationId,
     );
@@ -72,12 +73,16 @@ export class ConversationsController {
     description: 'Conversation title updated successfully',
   })
   @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
-  updateConversationTitle(
+  async updateConversationTitle(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') conversationId: string,
     @Body() dto: UpdateConversationTitleDto,
   ) {
-    return this.conversationsService.updateGroupTitle(
+    if (!dto.title?.trim()) {
+      throw new BadRequestException('Title cannot be empty');
+    }
+
+    return await this.conversationsService.updateConversationTitle(
       user.id,
       conversationId,
       dto.title,
@@ -91,12 +96,12 @@ export class ConversationsController {
     description: 'Participant added successfully',
   })
   @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
-  addParticipantToGroup(
+  async addParticipantToGroup(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') conversationId: string,
     @Body() dto: AddParticipantDto,
   ) {
-    return this.conversationsService.addParticipantToGroup(
+    return await this.conversationsService.addParticipantToGroup(
       user.id,
       conversationId,
       dto.userId,
@@ -110,12 +115,12 @@ export class ConversationsController {
     description: 'Participant removed successfully',
   })
   @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
-  removeParticipantFromGroup(
+  async removeParticipantFromGroup(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') conversationId: string,
     @Param('userId') userId: string,
   ) {
-    return this.conversationsService.removeParticipantFromGroup(
+    return await this.conversationsService.removeParticipantFromGroup(
       user.id,
       conversationId,
       userId,
@@ -129,10 +134,13 @@ export class ConversationsController {
     description: 'Conversation left successfully',
   })
   @ApiUnauthorizedResponse({ description: 'Invalid or missing access token' })
-  leaveConversation(
+  async leaveConversation(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') conversationId: string,
   ) {
-    return this.conversationsService.leaveConversation(user.id, conversationId);
+    return await this.conversationsService.leaveConversation(
+      user.id,
+      conversationId,
+    );
   }
 }

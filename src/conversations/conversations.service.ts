@@ -265,7 +265,7 @@ export class ConversationsService {
     return participant.map((p) => p.conversationId);
   }
 
-  async updateGroupTitle(
+  async updateConversationTitle(
     currentUserId: string,
     conversationId: string,
     title: string,
