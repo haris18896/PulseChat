@@ -1,51 +1,104 @@
-## Project setup
+# PulseChat — Learning Guide
+
+PulseChat is a **production-oriented realtime chat backend** built incrementally across nine phases. Each phase introduces one architectural concern, explains the reasoning behind it, and walks through implementation with verifiable checkpoints.
+
+You will build the same system a senior backend engineer would ship: REST APIs, JWT auth, Prisma + PostgreSQL, Redis-backed presence, Socket.IO rooms, horizontal scaling, NGINX, and production hardening.
+
+---
+
+## How to Use This Guide
+
+1. **Work in order.** Later phases assume earlier ones are complete.
+2. **Read the concept sections first.** They explain *why* before *how*.
+3. **Run every command block.** Type or paste commands exactly as shown.
+4. **Complete each checkpoint** before moving to the next section.
+5. **Keep Docker running** for Postgres (`localhost:5433`) and Redis after Phase 0.
+
+---
+
+## Prerequisites
+
+| Requirement | Notes |
+|-------------|-------|
+| Node.js 22+ | Matches the Docker base image |
+| Yarn | Package manager used throughout |
+| Docker Desktop | Postgres, Redis, API containers, NGINX |
+| NestJS CLI | `npm i -g @nestjs/cli` |
+| Basic TypeScript | Classes, decorators, async/await |
+| HTTP & REST | Methods, status codes, JSON bodies |
+
+---
+
+## Quick Reference — Daily Commands
 
 ```bash
-$ yarn install
+# Install dependencies
+yarn install
+
+# Local development (single instance)
+yarn start:dev
+
+# Unit / e2e tests
+yarn test
+yarn test:e2e
+
+# Start infrastructure
+docker compose --env-file .env up -d postgres redis
+
+# Scale full stack behind NGINX
+docker compose --env-file .env up -d --build --scale pulsechat-api=3
+
+# Local Prisma migrations (host machine → Docker Postgres)
+DATABASE_URL=postgresql://chat_user:chat_password@localhost:5433/pulsechat?schema=public npx prisma migrate dev
+
+# Socket integration tests (requires .env tokens)
+npx tsx socket-tests/socket-test-a.ts
+npx tsx socket-tests/socket-test-b.ts
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ yarn run start
+## Curriculum Overview
 
-# watch mode
-$ yarn run start:dev
+| Phase | Topic | Outcome |
+|-------|-------|---------|
+| **0** | Project Setup | NestJS + Fastify + Docker + Prisma foundation |
+| **1** | Authentication | Register, login, JWT guards |
+| **2** | Data Model & REST | Conversations, messages, pagination |
+| **3** | Socket.IO Gateway | Realtime messaging, typing, presence |
+| **4** | Redis Adapter | Cross-instance socket sync |
+| **5** | Docker Multi-Instance | Containerized, scalable API |
+| **6** | NGINX Load Balancing | Single entry point, WebSocket proxy |
+| **7** | Production Hardening | Errors, logging, rate limits, security |
+| **8** | Chat Product Features | Statuses, receipts, edits, groups |
+| **9** | Testing | Unit, e2e, socket, and adapter tests |
 
-# production mode
-$ yarn run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
 # Phase 0 — Project Setup
 
-### Create Nest Js APP
+> **Phase goal:** Establish a production-ready NestJS foundation with Fastify, Docker, PostgreSQL, Redis, Prisma, and developer tooling.
+
+### What You Will Learn
+
+- Scaffold a strict-mode NestJS application with Swagger and path aliases
+- Configure Husky and lint-staged for consistent code quality on every commit
+- Run PostgreSQL and Redis locally with Docker Compose
+- Integrate Prisma as the database access layer inside NestJS
+- Understand why Fastify is used instead of Express for this project
+
+### Prerequisites
+
+Node.js 22+, Yarn, Docker Desktop, basic TypeScript, and HTTP fundamentals.
+
+---
+
+
+## 0.1 — Create the NestJS Application
+
+**Concept:** PulseChat starts as a standard NestJS project in strict TypeScript mode. Swagger is added immediately so every endpoint you build can be explored interactively at `/api`.
+
+**Implementation:**
 
 ```sh
 sudo npm i -g @nestjs/cli
@@ -54,7 +107,7 @@ yarn add @types/mocha --dev
 yarn add @nestjs/swagger
 ```
 
-- add the following code to `main.ts` for swagger
+- Add the following code to `main.ts` for Swagger:
 
 ```ts
 // main.ts
@@ -74,7 +127,7 @@ SwaggerModule.setup('api', app, document);
 
 ```typescript
 // tsconfig.json
-// update the baseUrl: ./ to path
+// Update baseUrl: ./ to path
 
 //...............
 {
@@ -90,7 +143,11 @@ SwaggerModule.setup('api', app, document);
 }
 ```
 
-### Husky (git hooks)
+## 0.2 — Git Hooks with Husky
+
+**Concept:** Pre-commit hooks catch formatting and lint errors before they enter the repository. This keeps the main branch clean as the project grows.
+
+**Implementation:**
 
 ```sh
 yarn add -D husky lint-staged
@@ -111,23 +168,31 @@ Set `.husky/pre-commit`:
 yarn lint-staged
 ```
 
-**Run**
+**Usage**
 
 - Hooks run automatically on `git commit`.
-- After clone or pull, run `yarn` — the `prepare` script installs hooks.
+- After cloning or pulling, run `yarn` — the `prepare` script installs hooks.
 - Test manually: `yarn lint-staged` or `sh .husky/pre-commit`.
 
-### Docker setup
+## 0.3 — Docker Compose for Postgres and Redis
 
-- create the `docker-compose.yml` file
-- Add the postgres and redis image
-- run the `docker compose up -d` to install the images
+**Concept:** Chat applications need a relational database for durable data and Redis for ephemeral data (presence, pub/sub). Running both in Docker gives every developer an identical environment.
 
-### Config
+**Implementation:**
 
-- install config package
-- update the `src/app.module.ts` and `src/app.controller.ts`
-- run the development enviroment and test the response
+- Create the `docker-compose.yml` file.
+- Add the PostgreSQL and Redis images.
+- Run `docker compose up -d` to start the containers.
+
+## 0.4 — Environment Configuration
+
+**Concept:** `@nestjs/config` loads `.env` values into a typed configuration service. Never hard-code secrets or connection strings in source files.
+
+**Implementation:**
+
+- Install the config package.
+- Update `src/app.module.ts` and `src/app.controller.ts`.
+- Run the development environment and verify the response.
 
 ```bash
 npm install @nestjs/config
@@ -135,9 +200,11 @@ npm install @nestjs/config
 
 ---
 
----
+## 0.5 — Switch from Express to Fastify
 
-### Switch Express → Fastify
+**Concept:** Fastify is faster and aligns with NestJS’s recommended adapter for high-throughput APIs. PulseChat uses Fastify plugins (`@fastify/helmet`, `@fastify/cors`) instead of Express middleware.
+
+**Implementation:**
 
 ```sh
 yarn remove @nestjs/platform-express
@@ -161,19 +228,21 @@ await app.listen(port, '0.0.0.0'); // bind all interfaces (Docker-friendly)
 **Notes**
 
 - Use `@fastify/*` plugins — not Express middleware (`multer` → `@fastify/multipart`).
-- In controllers/guards, use `FastifyRequest` / `FastifyReply` instead of Express types.
-- E2E tests need `FastifyAdapter` too — see `test/app.e2e-spec.ts`.
-- Put static files in `public/` — served at `/public/`.
+- In controllers and guards, use `FastifyRequest` / `FastifyReply` instead of Express types.
+- E2E tests must also use `FastifyAdapter` — see `test/app.e2e-spec.ts`.
+- Place static files in `public/` — they are served at `/public/`.
 
-### Database Setup with Prisma
+## 0.6 — Database Setup with Prisma
+
+**Concept:** Prisma is the ORM and migration tool. Schema changes are version-controlled SQL files; the generated client gives type-safe queries in services.
 
 ### Install Prisma
 
-- first install prisma
-- then initialie prisma
-- update the `prisma/schema.prisma` and add the database url to the datasource db
-- Add the Model User to the `schema.prisma`
-- Then run migrations
+- Install Prisma.
+- Initialize Prisma.
+- Update `prisma/schema.prisma` and add the database URL to the `datasource db` block.
+- Add the `User` model to `schema.prisma`.
+- Run migrations.
 
 ```sh
 # installation
@@ -191,9 +260,13 @@ npx prisma generate
 npx prisma studio --port 5555
 ```
 
-## Add Prisma Service in Nest JS
+## 0.7 — Prisma Service in NestJS
 
-- Cretae prisma module
+**Concept:** A dedicated `PrismaService` extends the Prisma client and is injected into feature services. This is the only place that should open database connections.
+
+**Implementation:**
+
+- Create the Prisma module:
 
 ```sh
 nest g module prisma # src/prisma/prisma.module.ts
@@ -202,13 +275,39 @@ nest g service prisma # src/prisma/prisma.service.ts
 
 ---
 
+
+### Key Takeaways — Phase 0
+
+- A chat backend needs durable infrastructure (Postgres) and ephemeral infrastructure (Redis) from day one.
+- Feature-based module layout scales better than organizing purely by file type.
+- Binding to `0.0.0.0` and using environment variables prepares the app for container deployment.
+
 ---
 
-# Phase 1 - Authentication and Jwt Guards
 
-### Authentication
+# Phase 1 — Authentication and JWT Guards
 
-- Registration Flow
+> **Phase goal:** Implement secure user registration, login, and JWT-protected REST endpoints.
+
+### What You Will Learn
+
+- Hash passwords with bcrypt before storing them in PostgreSQL
+- Issue and verify JWT access tokens with `@nestjs/jwt`
+- Validate request bodies globally with `class-validator` and `ValidationPipe`
+- Protect routes using a custom `JwtAuthGuard` and `@CurrentUser()` decorator
+
+### Prerequisites
+
+Phase 0 completed. A `User` model must exist in Prisma.
+
+---
+
+
+## 1.1 — Authentication Flows
+
+Understanding these flows before writing code prevents security mistakes later.
+
+### Registration Flow
 
 ```
 Client sends email, username, password
@@ -224,7 +323,7 @@ User is saved in Postgres
 JWT token is returned
 ```
 
-- Login Flow
+### Login Flow
 
 ```
 Client sends email and password
@@ -236,7 +335,7 @@ Compare password with hashed password
 If valid, return JWT token
 ```
 
-- Protected Route Flow
+### Protected Route Flow
 
 ```
 Client sends Authorization: Bearer <token>
@@ -248,10 +347,12 @@ If valid, user data is attached to request
 Controller can access current user
 ```
 
-### Step - Install Packages
+## 1.2 — Install Dependencies
 
-- We are not using `Passport` yet.
-- Later we can add `Passport` if needed.
+**Implementation**
+
+- Passport is not used at this stage.
+- It can be added later if needed.
 
 ```sh
 yarn add @nestjs/jwt bcrypt
@@ -259,16 +360,22 @@ yarn add -D @types/bcrypt
 yarn add class-validator class-transformer
 ```
 
-### Step 2 — Add JWT Config to .env
+## 1.3 — Configure JWT in `.env`
 
-- Add JWT Config to env
+**Implementation**
+
+- Add JWT configuration to `.env`:
 
 ```sh
 JWT_SECRET="super-secret-change-this-later"
 JWT_EXPIRES_IN="7d"
 ```
 
-### Step 3 — Add Global Validation Pipe
+## 1.4 — Enable Global Request Validation
+
+**Concept:** DTOs are useless without enforcement. `ValidationPipe` rejects malformed input before it reaches your services.
+
+**Implementation**
 
 ```ts
 // main.ts
@@ -284,7 +391,9 @@ app.useGlobalPipes(
 );
 ```
 
-### Step 4 — Generate Modules
+## 1.5 — Generate Auth and Users Modules
+
+**Implementation**
 
 ```sh
 nest g module users
@@ -295,24 +404,32 @@ nest g controller auth
 nest g service auth
 ```
 
-### Step 5 — Create DTOs
+## 1.6 — Define Data Transfer Objects
+
+**Implementation** — create:
 
 - `src/auth/dto/register.dto.ts`
 - `src/auth/dto/login.dto.ts`
 
-### Step 6 — UsersService
+## 1.7 — Implement UsersService
 
-- update these files according to the functionality
+**Implementation** — update:
+
+- Update these files to implement the required functionality:
 
 - `src/users/users.service.ts`
 - `src/users/users.module.ts`
 
-### Step 7 - JWT Auth Guard + Current User Decorator
+## 1.8 — JWT Guard and `@CurrentUser()` Decorator
+
+**Concept:** Guards run before controllers. The decorator extracts the authenticated user the guard attached to the request.
+
+**Implementation** — create:
 
 - `src/auth/types/jwt-payload.type.ts`
 - `src/auth/guards/jwt-auth.guards.ts`
 - `src/auth/decorators/current-user.decorator.ts`
-- - with out this decorator
+- Without this decorator:
 
 ```sh
 Client sends token
@@ -332,11 +449,38 @@ Controller returns current user
 
 ---
 
+
+### Key Takeaways — Phase 1
+
+- Authentication belongs in guards and services—not scattered across controllers.
+- DTOs with `whitelist` and `forbidNonWhitelisted` prevent mass-assignment vulnerabilities.
+- JWT statelessness enables horizontal scaling later without server-side sessions.
+
 ---
 
-# Phase 2 - Conversation & Message Data Model
 
-By the end of this phase, we will have:
+# Phase 2 — Conversation and Message Data Model
+
+> **Phase goal:** Design and implement the conversation-centric data model and REST APIs for chats and messages.
+
+### What You Will Learn
+
+- Model many-to-many user–conversation relationships with a join table
+- Explain why messages belong to conversations—not directly to receivers
+- Build CRUD REST endpoints with authorization and membership checks
+- Implement cursor-based pagination suitable for chat history
+- Separate durable state (Postgres) from ephemeral state (Redis)
+
+### Prerequisites
+
+Phase 1 completed. You should be able to register, log in, and call protected routes.
+
+---
+
+
+### Deliverables
+
+When you finish this phase, you will have built:
 
 - ✅ Conversation database schema
 - ✅ Message database schema
@@ -347,14 +491,13 @@ By the end of this phase, we will have:
 - ✅ First Conversation APIs (REST)
 - ✅ Swagger documentation
 
-Notice that we are still NOT touching Socket.IO.
-Why?
-Because Realtime is just a transport layer.
-If your database and business logic are poorly designed, Socket.IO will only make those problems happen faster.
+Socket.IO is intentionally not introduced in this phase.
 
-## The Big Picture
+Realtime delivery is only a transport layer. If the database schema and business logic are poorly designed, Socket.IO will amplify those problems rather than solve them.
 
-Imagine WhatsApp. You don't actually send a message directly to another user. The message belongs to a Conversation, not directly to another user.
+## 2.1 — The Big Picture: Conversations, Not Direct Messages
+
+Imagine a messaging application such as WhatsApp. Messages are not sent directly to another user; they belong to a **conversation**.
 
 ```sh
 You
@@ -370,9 +513,9 @@ Conversation
 Message
 ```
 
-Why?
+### Why?
 
-Because tomorrow you may have:
+Because a conversation may later include multiple participants:
 
 ```
 You
@@ -403,16 +546,16 @@ Participants
 Messages
 ```
 
-This scales forever
+This design scales indefinitely.
 
-## Database Design
+## 2.2 — Database Design
 
-We'll create three new tables.
+We will create three new tables (plus the existing `User` table):
 
-1. User -> this table already exist
-2. Conversation -> Represents a chat
-3. ConversationParticipant -> this connects Users and Conversations
-4. Message -> this Stores every message ever sent
+1. **User** — already exists
+2. **Conversation** — represents a chat
+3. **ConversationParticipant** — join table connecting users and conversations
+4. **Message** — stores every message sent
 
 ```
 Conversation 1
@@ -426,7 +569,7 @@ Haris
 Ali
 ```
 
-## Final Relationship
+## 2.3 — Entity Relationship
 
 This is a classic many-to-many relationship.
 
@@ -445,9 +588,9 @@ User
 └────────── Message
 ```
 
-## Why We Need a Join Table
+## 2.4 — Why a Join Table Is Required
 
-Question: Why not simply do:
+Why not simply do the following?
 
 ```
 Conversation
@@ -455,9 +598,9 @@ Conversation
 users[]
 ```
 
-Because relational databases don't store arrays of foreign keys well.
+Relational databases do not store arrays of foreign keys efficiently.
 
-Instead we normalize the data.
+Instead, we normalize the data.
 
 Example:
 
@@ -487,7 +630,7 @@ Now we can have:
 
 No schema changes.
 
-## Messages
+## 2.5 — Message Model
 
 Every message belongs to:
 
@@ -503,17 +646,17 @@ content
 createdAt
 ```
 
-Notice: No receiverId.
+Note: There is no `receiverId`.
 
-The conversation already knows who the participants are.
+The conversation already defines who the participants are.
 
-## What About Read Receipts?
+## 2.6 — Read Receipts (Deferred)
 
-Not yet.
+Not in this phase.
 
-We'll add those later.
+Those will be added in a later phase.
 
-This is exactly how professional software is built:
+This incremental approach reflects how production software is typically built:
 
 ```
 Version 1
@@ -541,11 +684,11 @@ Attachments
 Message Reactions
 ```
 
-Each feature gets its own migration.
+Each feature receives its own migration.
 
-## Why Aren't We Storing Online Status?
+## 2.7 — Online Status Belongs in Redis
 
-Because online status is temporary.
+Online status is ephemeral by nature.
 
 Database:
 
@@ -557,11 +700,11 @@ online = true
 
 That is `Bad`.
 
-Suppose the server crashes.
+If the server crashes,
 
-Everyone remains: `online = true`
+every user may remain marked as `online = true`
 
-Wrong.
+which is incorrect.
 
 Instead:
 
@@ -573,13 +716,13 @@ user:123
 online
 ```
 
-Redis stores temporary state.
+Redis is used for temporary state.
 
-Postgres stores permanent state.
+PostgreSQL stores permanent state.
 
-This separation is one of the most important architectural concepts you'll learn.
+Separating ephemeral state from durable state is one of the most important architectural concepts in this project.
 
-## Folder Strucutre
+## 2.8 — Recommended Folder Structure
 
 After this phase, your project will begin to grow into a real backend.
 
@@ -610,14 +753,14 @@ We are organizing by feature, not by file type.
 
 This is the architecture used in most mature NestJS applications because each feature owns its controller, service, DTOs, and related logic.
 
-## Adding Loggers
+## 2.9 — Logging Options
 
-- There are 2 options
+There are two options:
 
 ### Option A
 
-- install pacakges `yarn add winston nest-winston` for fastify add this as well `yarn add nestjs-pino pino-http pino-pretty`
-- create the `src/common/logger/logger.service.ts`
+- Install packages `yarn add winston nest-winston` for fastify add this as well `yarn add nestjs-pino pino-http pino-pretty`
+- Create `src/common/logger/logger.service.ts`
 
 ```ts
 import { Injectable, LoggerService, Scope } from '@nestjs/common';
@@ -713,8 +856,8 @@ import { AppLogger } from './logger.service';
 export class LoggerModule {}
 ```
 
-- import it in the `app.module.ts`
-- update the `main.ts`
+- Import it in `app.module.ts`
+- Update `main.ts`
 
 ```ts
 // without fastify
@@ -734,7 +877,7 @@ const logger = app.get(AppLogger);
 app.useLogger(logger);
 ```
 
-- usage
+- Usage
 
 ```ts
 import { AppLogger } from 'src/common/logger/logger.service';
@@ -742,9 +885,9 @@ import { AppLogger } from 'src/common/logger/logger.service';
 pubClient.on('connect', () => this.log.log('Redis pub client connected'));
 ```
 
-## Phase 2 Roadmap
+## 2.10 — Phase 2 Roadmap
 
-We'll break this into small learning steps, just like we did with authentication.
+This phase is broken into small, incremental steps, following the same approach used for authentication.
 
 #### Step 1 — Database Design (Prisma)
 
@@ -805,9 +948,11 @@ Learn:
 - Ordering
 - Sender relationships
 
-## Phase 2 - Step 1: Prisma Data Model
+## 2.11 — Implement the Prisma Data Model
 
-- Open `Primsa/schema.prisma` and add the models for the `Conversation`, `Message`, `ConversationParticipants`
+**Implementation**
+
+- Open `Prisma/schema.prisma` and add the models for the `Conversation`, `Message`, `ConversationParticipants`
 
 ```prisma
 
@@ -865,9 +1010,9 @@ model Message {
 
 In the `User` model we have `conversations ConversationParticipant[]`.
 
-A user can be part of many conversations. But we don’t connect `User` directly to `Conversation`.
+A user can be part of many conversations. But Use:n’t connect `User` directly to `Conversation`.
 
-We connect through `ConversationParticipant` Because later this table can store extra data like:
+The relationship goes through `ConversationParticipant`, which can later store additional fields such as:
 
 ```
 joinedAt
@@ -877,13 +1022,13 @@ lastReadAt
 leftAt
 ```
 
-`messages Message[]` A User can send many messages
+`messages Message[]` — a user can send many messages.
 
-In the `Conversation` model `title` is optional becuase for 1-to-1 chat title can be empty but for group chat title needs to be there "Project Team" etc
+In the `Conversation` model, `title` is optional. One-to-one chats may have no title; group chats typically require one (e.g., "Project Team").
 
-`participants ConversationParticipant[]` This means that one conversation can have many participants
+`participants ConversationParticipant[]` — one conversation can have many participants.
 
-`ConversationParticipant` this is the join table
+`ConversationParticipant` is the join table.
 
 ```
 conversationId String
@@ -892,16 +1037,15 @@ userId String
 
 This connects: `User ↔ Conversation`
 
-`@@unique([conversationId, userId])` This prevents duplicate participants. So the same user cannot be added twice to the same conversation.
+`@@unique([conversationId, userId])` prevents duplicate participants — the same user cannot be added twice to one conversation.
 
-`onDelete: Cascade` If a conversation is deleted, related participants are deleted automatically.
-If a user is deleted, their participant rows are deleted automatically.
+`onDelete: Cascade` — if a conversation is deleted, related participants are removed automatically. If a user is deleted, their participant rows are removed automatically.
 
-In the `Message` Model `conversationId String` Message belongs to one conversation.
+In the `Message` model, `conversationId` identifies the conversation the message belongs to.
 
-`content String` For now, we only support text messages.
+`content String` — currently, only text messages are supported.
 
-later we can add:
+Future fields may include:
 
 ```
 imageUrl
@@ -911,7 +1055,9 @@ editedAt
 deletedAt
 ```
 
-- Now we need to run migrations and generate the prisma client and then open the studio to check
+Run migrations, generate the Prisma client, and verify in Prisma Studio:
+
+**Checkpoint:**
 
 ```sh
 npx prisma migrate dev --name add_conversations_and_messages
@@ -919,7 +1065,7 @@ npx prisma generate
 npx prisma studio
 ```
 
-in the studio you should now see
+Prisma Studio should display:
 
 ```
 User
@@ -928,9 +1074,11 @@ ConversationParticipant
 Message
 ```
 
-## Phase 2 — Step 2: Conversation Module + First API
+## 2.12 — Conversation Module and First API
 
-- we will create `POST /conversations`, this api will:
+**Implementation**
+
+Implement `POST /conversations`. This endpoint will:
 
 ```
 1. Require JWT auth
@@ -953,29 +1101,28 @@ nest g service conversations
 
 ```
 
-in the `conversations.service.ts`:
+In `conversations.service.ts`:
 
-- `[...new Set([currentUserId, ...dto.participantIds]),];` this reomves duplicate users
-- `if (uniqueParticipantIds.length < 2)` A chat with yourself isn't valid for now
+- `[...new Set([currentUserId, ...dto.participantIds]),];` this removes duplicate users
+- `if (uniqueParticipantIds.length < 2)` — a conversation with only one participant is not valid.
 - ```
   participants: {
     create: uniqueParticipantIds.map(...)
   }
   ```
 
-this creates the conversation and participant rows together
+This creates the conversation and participant rows in a single operation.
 
-Now we need to update the `conversation.controller.ts`
+Update `conversations.controller.ts`:
 
 ```
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 ```
 
-Applied at controller level. So all routes inside this controller are protected.
-`@CurrentUser() user` this gets the logged in user from the JWT guard
+Applied at the controller level, so all routes in this controller are protected. `@CurrentUser() user` injects the authenticated user from the JWT guard.
 
-at this point we have called the `/conversation` post request with the following payload
+At this point, `POST /conversations` can be called with the following payload:
 
 ```
 {
@@ -988,7 +1135,7 @@ at this point we have called the `/conversation` post request with the following
 }
 ```
 
-if you have notifice the first id is our own, so our duplicate removal functionality also worked
+If the first ID is the current user's, duplicate removal has worked correctly:
 
 ```
 [
@@ -1005,29 +1152,30 @@ this became
 ]
 ```
 
-- `in similar way we will be creating the messages as well`
+Messages are created using the same pattern.
 
-## Phase 2 - Step 3 - Pagination to the Messages api
+## 2.13 — Cursor Pagination for Messages
 
-- so far we have added the conversation, getconversationById, get all conversations, create message and get messages by conversations
-- now we need to add the pagination to the `getMessageByConversations` api,
+**Implementation**
 
-### Why Pagination?
+So far, the following endpoints exist: create conversation, get conversation by ID, list conversations, create message, and get messages by conversation. Next, add pagination to `GET /messages/:conversationId`.
 
-Right now, this endpoint returns all messages.
+### Concept: Why Pagination Is Mandatory
 
-That is fine with 5 messages.
+Currently, this endpoint returns all messages.
 
-But imagine:
+That is acceptable with a small number of messages.
+
+At scale:
 
 `1 conversation = 50,000 messages`
 
-Bad API:
+An unbounded response:
 
 GET `/messages/:conversationId`
 → returns 50,000 messages
 
-Problems:
+Problems include:
 
 ```
 slow response
@@ -1036,11 +1184,11 @@ huge frontend memory usage
 bad mobile performance
 ```
 
-So instead we load messages in chunks.
+Instead, messages are loaded in pages.
 
-### Pagination Style for Chat
+### Concept: Cursor-Based Pagination for Chat
 
-For chat apps, we usually use:
+Chat applications typically use:
 
 limit
 cursor
@@ -1053,9 +1201,9 @@ Then for older messages:
 
 GET `/messages/:conversationId?limit=20&cursor=message-id`
 
-This means:
+Meaning:
 
-Give me 20 messages older than this message.
+Return 20 messages older than the cursor message.
 
 ```ts
 // message.service.ts
@@ -1090,7 +1238,7 @@ const messages = await this.prisma.message.findMany({
 });
 
 const hasNextPage = messages.length > limit;
-const items = hasNextPage ? messages.slice(0, limit) : messagescur;
+const items = hasNextPage ? messages.slice(0, limit) : messages;
 const nextCursor = hasNextPage ? items[items.length - 1].id : null;
 
 return {
@@ -1104,12 +1252,42 @@ return {
 
 ---
 
+
+### Key Takeaways — Phase 2
+
+- Socket.IO is a transport layer; schema and business logic must be correct first.
+- ConversationParticipant enables group chats and future metadata (`lastReadAt`, roles).
+- Cursor pagination avoids loading entire message histories into memory.
+
 ---
 
-# Phase 3 - Scoket.io Gateway
 
-- We’ll start with the simplest Socket.IO gateway first, then gradually add JWT auth, rooms, Redis adapter, and message broadcasting
-  By the end of this step, we will have:
+# Phase 3 — Socket.IO Gateway
+
+> **Phase goal:** Add realtime messaging, typing indicators, and presence on top of the REST foundation.
+
+### What You Will Learn
+
+- Create a Socket.IO gateway with connection lifecycle handlers
+- Authenticate WebSocket connections using JWT in the handshake
+- Join conversation rooms and broadcast events only to participants
+- Persist messages through the existing service layer—not duplicated in the gateway
+- Track online/offline presence in Redis across multiple tabs per user
+
+### Prerequisites
+
+Phase 2 completed. REST conversation and message APIs must work.
+
+---
+
+
+### Introduction
+
+Realtime messaging is added in layers. Start with the simplest Socket.IO gateway, then progressively add JWT authentication, conversation rooms, the Redis adapter, and message broadcasting.
+
+### Deliverables
+
+When you finish this step, you will have:
 
 ```
 Socket.IO server running
@@ -1119,7 +1297,7 @@ Client can send ping event
 Server replies with pong event
 ```
 
-- No JWT yet. No chat rooms yet. No Redis adapter yet.
+JWT authentication, chat rooms, and the Redis adapter are not included yet.
 
 ```sh
 yarn add @nestjs/websockets @nestjs/platform-socket.io socket.io
@@ -1129,8 +1307,8 @@ nest g module chat
 nest g gateway chat
 ```
 
-- create the `chat.gateway.ts` and add the connection, disconnect and ping handlers
-- create the `socket-test.ts` and install the `tsx` if its not installed
+- Create `chat.gateway.ts` with connection, disconnect, and ping handlers.
+- Create `socket-test.ts` and install `tsx` if it is not already installed.
 
 ```sh
 yarn add -D tsx
@@ -1140,8 +1318,7 @@ yarn start:dev
 npx tsx socket-test.ts
 ```
 
-- at this point our socket-io server is alive and event round trip is working fine
-- now we need to add the JWT for scoket.io
+At this point, the Socket.IO server is running and the event round-trip works correctly. Next, add JWT authentication for Socket.IO.
 
 ```sh
 npx tsx socket-test.ts
@@ -1153,7 +1330,11 @@ npx tsx socket-test.ts
 # }
 ```
 
-## Phase 3 - Step 1 - JWT Authentication for Scoket.io
+## 3.1 — JWT Authentication for Socket.IO
+
+**Concept:** HTTP guards do not apply to WebSockets. Validate the JWT during the Socket.IO handshake and attach the user to the socket.
+
+**Flow:**
 
 ```
 Socket connects
@@ -1167,13 +1348,15 @@ Gateway attaches user to socket
 Only authenticated users can connect
 ```
 
-## Phase 3 - step 2 - Join Conversation room
+## 3.2 — Join Conversation Rooms
 
-- we will add socket event `join_conversation`
-- we will add the dto for the `join-conversation.dto.ts`
-- now we need to add service to check "Is this user inside this conversation?" `isUserParticipant` in the `conversation.service.ts`
-- Import the `conversation` module into the chat module
-- update the chat gateway
+**Implementation**
+
+- Add the `join_conversation` socket event.
+- Add the DTO in `join-conversation.dto.ts`.
+- Add `isUserParticipant` in `conversations.service.ts` to verify membership.
+- Import the `ConversationsModule` into the `ChatModule`.
+- Update the chat gateway.
 
 ```ts
 import { io } from 'socket.io-client';
@@ -1213,7 +1396,7 @@ socket.on('disconnect', (reason) => {
 });
 ```
 
-- now we need to update the `socket-test.ts` from using dummy data to use the actual room conversation
+- Update `socket-test.ts` to use a real conversation ID instead of dummy data.
 
 ```ts
 // ..............
@@ -1225,7 +1408,7 @@ socket.on('authenticated', () => {
   });
 });
 
-socket.on('conversation_Joined', (data) => {
+socket.on('conversation_joined', (data) => {
   console.log('here is the conversation data : ', data);
 
   socket.emit('send_message', {
@@ -1253,9 +1436,13 @@ socket.on('disconnect', (reason) => {
 // ..............
 ```
 
-## Phase 3 - Step 3 - Socket send_message
+## 3.3 — The `send_message` Event
 
-- this event will
+**Concept:** The gateway receives the event, delegates persistence to `MessagesService`, updates `lastMessageAt`, and broadcasts `new_message` to the room.
+
+**Flow:**
+
+This event will:
 
 ```
 receive socket message
@@ -1265,24 +1452,26 @@ receive socket message
 → emit new_message to conversation room
 ```
 
-## Phase 3 - Step 4 - Typing Indicators
+## 3.4 — Typing Indicators
 
-- We will add two socket events
-- When User A starts typing, User B receives `user_typing_start`
-- When User A stops typing, User B receives `user_typing_stop`
+**Implementation**
+
+Add two socket events:
+- When User A starts typing, User B receives `user_typing_start`.
+- When User A stops typing, User B receives `user_typing_stop`.
 
 ```
 typing_start
 typing_stop
 ```
 
-- for testing add the below to the test - a
+For testing, add the following to test A:
 
 ```ts
 // ............
 // ............
 // ............
-socket.on('conversation_Joined', (data) => {
+socket.on('conversation_joined', (data) => {
   console.log('Client A joined conversation:', data);
 
   socket.emit('typing_start', {
@@ -1300,7 +1489,7 @@ socket.on('conversation_Joined', (data) => {
 // ............
 ```
 
-- and add this to the test- b
+Add the following to test B:
 
 ```ts
 // ............
@@ -1312,9 +1501,11 @@ socket.on('conversation_Joined', (data) => {
 // ............
 ```
 
-## Phase 3 - Step 5 - Presence System with Redis
+## 3.5 — Presence System with Redis
 
-We will track
+**Implementation**
+
+Track the following:
 
 ```
 online
@@ -1322,21 +1513,19 @@ offline
 connected sockets per user
 ```
 
-Why Redis?
+### Why Redis?
 
-Presence is temporary.
-
-Do not save this in Postgres:
+Presence is temporary. Do not persist it in PostgreSQL:
 
 `user.online = true`
 
-Because if the server crashes, users may remain incorrectly online.
+If the server crashes, users may remain incorrectly marked as online.
 
-Redis is better for temporary state.
+Redis is the appropriate store for temporary state.
 
 ### Presence Logic
 
-One user can have multiple sockets:
+A single user may have multiple active sockets:
 
 ```
 Haris
@@ -1345,7 +1534,7 @@ Haris
  └── Mobile app
 ```
 
-So we should not mark user offline until all sockets disconnect.
+A user should not be marked offline until all of their sockets disconnect.
 
 ### Redis Key Design
 
@@ -1377,26 +1566,23 @@ nest g module presence
 nest g service presence
 ```
 
-- in the presence service we need to add the following funcitonalites `isOnline`, `getSockets` `removeSocket` to check online status, get the total count of the online sockets and remove socket
-- then we uitilize these in the `chat` service handle connect and handle disconnect
-- Afther this we need to add `/users/online-status` api to check which users are online
-- After that we need to improve the online-offline presence broadcasting relevant to users only
-  Right now we are probably doing:
+- In the presence service, implement `isOnline`, `getSockets`, and `removeSocket` to check online status, retrieve active socket IDs, and remove a socket on disconnect.
+- Use these methods in the chat gateway's `handleConnection` and `handleDisconnect` handlers.
+- Add a `GET /users/online-status` endpoint to query which users are online.
+- Scope presence broadcasting to relevant users only. The current approach likely does:
 
 `this.server.emit('user_online', ...)`
 
-That sends the event to everyone connected.
+That broadcasts the event to every connected client, which is unsuitable for production.
 
-Bad for production.
-
-Instead, we want:
+Instead, the desired behavior is:
 
 ```
 When Haris comes online
 → notify only users who share conversations with Haris
 ```
 
-we need to add this funciton to the `conversation.service.ts`, This finds all conversations where this user is a participant.
+Add the following method to `conversations.service.ts`. It returns all conversation IDs in which the user participates:
 
 ```ts
 async getConversationIdsForUser(userId: string): Promise<string[]> {
@@ -1413,7 +1599,7 @@ async getConversationIdsForUser(userId: string): Promise<string[]> {
   }
 ```
 
-Then we need to add helper method inside the chatGateway `emitPresenceToUserConversation`
+Then add a helper method inside `ChatGateway` called `emitPresenceToUserConversation`:
 
 ````ts
 // ..........
@@ -1435,7 +1621,7 @@ private async emitPresenceToUserConversation(
   // .................
   // .................
 
-// in the hanleConnection and handleDisconnect
+// in the handleConnection and handleDisconnect
 if (socketCount === 1) {
         await this.emitPresenceToUserConversation(
           client.user.id,
@@ -1450,10 +1636,38 @@ if (socketCount === 1) {
       ```
 ````
 
+
+### Key Takeaways — Phase 3
+
+- Gateways should orchestrate; services should own business rules.
+- Room-based broadcasting scopes events to authorized participants.
+- Presence is ephemeral—never store `online = true` in PostgreSQL.
+
+---
+
+
 # Phase 4 — Redis Adapter for Socket.IO
 
-Purpose: make realtime work across multiple backend instances.
-We will add:
+> **Phase goal:** Synchronize Socket.IO events across multiple Node.js processes using Redis Pub/Sub.
+
+### What You Will Learn
+
+- Understand why a single Node.js process cannot see sockets on another instance
+- Configure the official `@socket.io/redis-adapter` in NestJS
+- Prove cross-instance delivery with clients on different ports
+
+### Prerequisites
+
+Phase 3 completed. Socket.IO gateway with rooms and JWT must work on one instance.
+
+---
+
+
+## 4.1 — Why the Redis Adapter Exists
+
+**Purpose:** Enable realtime messaging across multiple backend instances.
+
+This phase adds:
 
 ```
 Socket.IO Redis adapter
@@ -1476,11 +1690,11 @@ Socket.IO’s Redis adapter forwards packets between multiple Socket.IO servers 
 yarn add @socket.io/redis-adapter ioredis
 ```
 
-- create `src/chat/adapters/redis-io.adapter.ts`
-  Default behavior: `Instance A only knows Instance A sockets`
-  Redis adapter behavior: `Instance A can emit to rooms containing sockets on Instance B`
+- Create `src/chat/adapters/redis-io.adapter.ts`.
+  - Default behavior: Instance A only knows sockets connected to Instance A.
+  - Redis adapter behavior: Instance A can emit to rooms containing sockets on Instance B.
 
-### Register Adapter in main.ts
+### Implementation: Register the Adapter in `main.ts`
 
 ```ts
 // Add import:
@@ -1503,7 +1717,7 @@ app.useWebSocketAdapter(redisIoAdapter);
 await app.listen(port, '0.0.0.0');
 ```
 
-### Cross-instance Redis Adapter test
+### Checkpoint: Cross-Instance Redis Adapter Test
 
 ```
 Client A → backend port 3000
@@ -1515,6 +1729,8 @@ Client A sends message
 Client B receives new_message
 ```
 
+**Checkpoint:**
+
 ```sh
 PORT=3000 yarn start:dev
 
@@ -1524,9 +1740,9 @@ PORT=3001 yarn start:dev
 PORT=3001 npx nest start --watch
 ```
 
-- update the `scoket-test-b.ts`
+- Update `socket-test-b.ts` accordingly.
 
-Why this proves Redis Adapter
+### Why This Proves the Redis Adapter Works
 
 Without Redis adapter:
 
@@ -1561,11 +1777,36 @@ const socket = io('http://localhost:3001/chat', {
 });
 ```
 
-# Phase 5 — Multi-instance Docker Setup
 
-Purpose: run multiple PulseChat backend containers.
+### Key Takeaways — Phase 4
 
-We will add:
+- The Redis adapter forwards packets—it does not store socket state as keys.
+- Sticky sessions help, but the adapter is what makes multi-instance rooms work.
+
+---
+
+
+# Phase 5 — Multi-Instance Docker Setup
+
+> **Phase goal:** Containerize the API and run multiple identical backend instances against shared Postgres and Redis.
+
+### What You Will Learn
+
+- Write a multi-stage Dockerfile for NestJS + Prisma
+- Connect containers to existing Postgres and Redis services
+- Scale API replicas with `docker compose up --scale`
+- Run `prisma migrate deploy` on container startup
+
+### Prerequisites
+
+Phases 0–4 completed. Docker Compose already runs Postgres and Redis.
+
+---
+
+
+**Purpose:** Run multiple PulseChat backend containers.
+
+This phase adds:
 
 ```
 Dockerfile
@@ -1581,7 +1822,7 @@ connect it to existing Postgres + Redis
 prepare it for multiple backend instances
 ```
 
-Phase 5 Steps
+## 5.1 — Implementation Steps
 
 1. Create .dockerignore
 2. Create Dockerfile
@@ -1591,7 +1832,9 @@ Phase 5 Steps
 6. Test Socket.IO from Docker backend
 7. Scale to multiple backend containers
 
-- After adding the `Dockerfile` and updating the `Docker-compose.yml` file
+After adding the `Dockerfile` and updating `docker-compose.yml`:
+
+**Checkpoint:**
 
 ```sh
 docker compose down
@@ -1614,14 +1857,41 @@ docker builder prune -f
 docker compose build --no-cache && docker compose up -d && docker logs -f pulsechat_api
 ```
 
-- after successful api calls on the docker multi-instance setup
-- test the `npx tsx sockets-tests/socket-test-a.ts`
+After REST API calls succeed in the Docker multi-instance setup, run:
+
+`npx tsx socket-tests/socket-test-a.ts`
+
+
+### Key Takeaways — Phase 5
+
+- Containers should be stateless; all durable data lives in Postgres.
+- Removing fixed `container_name` values is required for scaling.
+- Use `expose` internally and publish only the reverse-proxy port.
+
+---
+
 
 # Phase 6 — NGINX Load Balancing
 
-Purpose: put 3 backend instances behind one entry point.
+> **Phase goal:** Place multiple API containers behind NGINX with WebSocket-aware load balancing.
 
-We will add:
+### What You Will Learn
+
+- Configure an upstream block and `proxy_pass` for horizontal scaling
+- Forward `Upgrade` and `Connection` headers for Socket.IO
+- Use `ip_hash` for sticky sessions during WebSocket handshakes
+- Understand `ports` vs `expose` in Docker networking
+
+### Prerequisites
+
+Phase 5 completed. At least one API container runs successfully in Docker.
+
+---
+
+
+**Purpose:** Place three backend instances behind a single entry point.
+
+This phase adds:
 
 ```
 NGINX config
@@ -1630,7 +1900,7 @@ load balancing
 test clients connected to different instances
 ```
 
-- Goal
+### Architecture Goal
 
 ```
 localhost:8080
@@ -1646,16 +1916,16 @@ Clients will connect to:
 
 `io('http://localhost:8080/chat')`
 
-instead of:
+Instead of::
 
 `io('http://localhost:3000/chat')`
 
-- create `nginx/default.conf`
-- update the `docker-compose.yml` file for the nginx
+- Create `nginx/default.conf`.
+- Update `docker-compose.yml` to include the NGINX service.
 
-##### Without Nginx
+##### 6.1 — Architecture Without a Reverse Proxy
 
-- without nginx, your architecture looks like this
+Without NGINX, the architecture looks like this:
 
 ```
                 Internet
@@ -1672,7 +1942,7 @@ instead of:
       PostgreSQL           Redis
 ```
 
-This is perfect for development, but imagine you have:
+This is sufficient for development, but consider a production load such as:
 
 ```
 20,000 users online
@@ -1692,13 +1962,13 @@ If your machine has:
 32 cores
 ```
 
-your application is only using `one`.
+the application uses only `one`.
 
-So the first question becomes: `How do we utilize all CPU cores?`
+The key question becomes: `How do we utilize all CPU cores?`
 
 The answer is: `Run multiple instances of the application.`
 
-- instead of this
+Instead of:
 
 ```
              One Instance
@@ -1709,7 +1979,7 @@ The answer is: `Run multiple instances of the application.`
         └──────────────────┘
 ```
 
-we do this
+Use:
 
 ```
              Three Instances
@@ -1730,11 +2000,9 @@ we do this
         └──────────────────┘
 ```
 
-- Problem #1
+##### Problem: Routing
 
-If the browser sends a request...
-
-Where should it go?
+When the browser sends a request, where should it go?
 
 ```
 3001 ?
@@ -1744,13 +2012,13 @@ Where should it go?
 3003 ?
 ```
 
-The browser doesn't know.
+The browser has no way to decide.
 
-That's where NGINX comes in.
+NGINX provides the answer.
 
-- Think of NGINX like a Receptionist
+##### 6.2 — NGINX as a Request Router
 
-Imagine an office.
+Consider an office layout:
 
 ```
 Customer
@@ -1763,15 +2031,11 @@ Receptionist
 Employee 1    Employee 2
 ```
 
-The customer never directly goes to Employee 1.
-
-He talks to the receptionist.
-
-The receptionist decides.
+The customer does not go directly to an employee. They speak to the receptionist, who routes the request.
 
 NGINX is that receptionist.
 
-instead of
+Instead of:
 
 ```
 Browser
@@ -1780,7 +2044,7 @@ Browser
 API #1
 ```
 
-we do
+Use:
 
 ```
 Browser
@@ -1793,7 +2057,9 @@ NGINX
 API1    API2            API3
 ```
 
-What is an Upstream?
+##### 6.3 — Upstream Blocks
+
+**Concept:** An upstream is NGINX’s named list of backend servers—like an array of API instances.
 
 ```
 upstream pulsechat_api_upstream {
@@ -1801,18 +2067,18 @@ upstream pulsechat_api_upstream {
 }
 ```
 
-- Upsteadm is simply `A list of backend servers.` Think of it like an array.
-- in javascript it will be
+- An **upstream** is a list of backend servers — conceptually similar to an array.
+- In JavaScript, that would be:
 
 ```js
 const servers = [api1, api2, api3];
 ```
 
-- Nginx calls this: `upsteam`
+- NGINX calls this an `upstream`.
 - this line `upstream pulsechat_api_upstream {...}` means `Create a backend group called: pulsechat_api_upstream`, you can call it anything like `backend`, `api`, `chat_servers`, `production_cluster`, all are valid names
-- this line `server pulsechat-api:3000;` means `inside that group` there is one server `plusechat-api at port 3000`
-- notice something intersting, we never wrote, `localhost` we wrote `pulsechat-api` why?, ebcuase Docker Comppose automaitcaly creates `DNS`, every service name becomse a hostname inside docker exactly like `google.com`, `github.com`, docker has its own internal DNS
-- later we will simply do
+- this line `server pulsechat-api:3000;` means `inside that group` there is one server `pulsechat-api at port 3000`
+- notice something interesting, we never wrote, `localhost` we wrote `pulsechat-api` why?, because Docker Compose automatically creates `DNS`, every service name becomse a hostname inside docker exactly like `google.com`, `github.com`, docker has its own internal DNS
+- Later, the upstream block will look like:
 
 ```
 upstream pulsechat_api_upstream {
@@ -1826,25 +2092,27 @@ upstream pulsechat_api_upstream {
 }
 ```
 
-##### What does ip_hash do?
+##### 6.4 — Sticky Sessions with `ip_hash`
 
-- This is extremely important for WebSockets.
-  Suppose: `User A` connects.
+**Concept:** WebSocket connections must return to the same backend during the handshake window. `ip_hash` routes a client IP consistently.
+
+This is critical for WebSockets. Suppose `User A` connects.
 
 NGINX sends him to `API #2`
 
-Now he sends another request. Without `ip_hash` NGINX might send him to `API #1`
+They send another request. Without `ip_hash`, NGINX might route them to `API #1`.
 
 The problem?
 
-His WebSocket lives on API #2.
+Their WebSocket connection lives on API #2.
 
 API #1 knows nothing about it.
 
 Connection breaks.
 
-- ip_hash says `Every request from the same client IP should always go to the same backend.`
-  example
+- `ip_hash` ensures that every request from the same client IP is routed to the same backend.
+
+Example:
 
 ```
 192.168.1.15
@@ -1862,14 +2130,15 @@ API #2
 API #2
 ```
 
-Always
+Always.
 
-- this is called `Sticky Sessions`, Later we'll discuss why Redis Adapter makes sticky sessions less critical, but it's still a good practice.
+This is called **sticky sessions**. The Redis adapter reduces the dependency on sticky sessions, but they remain a good practice.
 
 ##### Server Block
 
-- This is exactly like a NestJS controller.
-  In Nest:
+This is analogous to a NestJS controller.
+
+In NestJS:
 
 `@Controller('users')`
 
@@ -1881,15 +2150,13 @@ server {
 }
 ```
 
-means
-
-Handle incoming HTTP requests.
+This block handles incoming HTTP requests.
 
 ##### Listen
 
 `listen 80;` means listen on `port 80` inside docker
 
-- outside docker compose maps it
+Outside Docker, Compose maps:
 
 ```
 8080
@@ -1901,7 +2168,7 @@ Handle incoming HTTP requests.
 
 ##### Location
 
-For every request.
+This applies to every request path:
 
 ```
 /
@@ -1917,14 +2184,15 @@ socket.io
 api
 ```
 
-everything
+all paths
 
 ##### Proxy Pass
 
-- This is the most important line. `proxy_pass http://pulsechat_api_upstream;`
-  this means `Don't handle the request yourself.` forward it
+This is the most important directive: `proxy_pass http://pulsechat_api_upstream;`
 
-Think of it like:
+It means NGINX does not handle the request itself — it forwards it.
+
+Flow:
 
 ```
 Browser
@@ -1938,17 +2206,13 @@ NGINX
 API
 ```
 
-NGINX doesn't generate the response.
-
-NestJS does.
-
-NGINX simply forwards the request and returns the response.
+NGINX does not generate the response; NestJS does. NGINX forwards the request and returns the response.
 
 ##### Why these headers?
 
 proxy_set_header Host $host;
 
-Suppose browser requested
+Suppose the browser requested:
 
 chat.example.com
 
@@ -1958,7 +2222,7 @@ NestJS would receive
 
 localhost
 
-instead of
+Instead of:
 
 chat.example.com
 
@@ -1968,15 +2232,7 @@ Similarly:
 
 proxy_set_header X-Real-IP $remote_addr;
 
-Without it,
-
-every request appears to come from
-
-127.0.0.1
-
-Instead,
-
-NestJS receives the user's real IP.
+Without it, every request appears to originate from `127.0.0.1`. With it, NestJS receives the client's real IP address.
 
 This is very important for:
 
@@ -1989,7 +2245,7 @@ Security
 
 ##### WebSocket Upgrade
 
-These two lines are the magic behind WebSockets:
+These two directives enable WebSocket support:
 
 proxy_set_header Upgrade $http_upgrade;
 proxy_set_header Connection "upgrade";
@@ -1998,13 +2254,7 @@ A browser initially sends a normal HTTP request:
 
 GET /chat
 
-Then it says:
-
-"I don't want HTTP anymore. Please upgrade this connection to WebSocket."
-
-These headers tell NGINX:
-
-"Allow the protocol upgrade and keep the connection open."
+The client then requests a protocol upgrade to WebSocket. These headers instruct NGINX to allow the upgrade and keep the connection open.
 
 Without them:
 
@@ -2020,7 +2270,7 @@ proxy_read_timeout 3600s;
 proxy_send_timeout 3600s;
 ```
 
-Normally, HTTP requests finish in milliseconds.
+HTTP requests typically complete in milliseconds.
 
 WebSockets are different.
 
@@ -2032,19 +2282,19 @@ A user may stay connected for:
 2 hours
 ```
 
-If NGINX had the default timeout (often 60 seconds), it would close an idle WebSocket after one minute.
+With the default timeout (often 60 seconds), NGINX would close an idle WebSocket after one minute.
 
 Setting these to one hour allows long-lived WebSocket connections.
 
 ##### Why container_name is removed
 
-This is one of the most important Docker concepts.
+This is a critical Docker concept.
 
 Currently:
 
 `container_name: pulsechat_api`
 
-means Docker creates exactly one container with that name.
+Docker creates exactly one container with that name.
 
 If you try to scale:
 
@@ -2060,7 +2310,7 @@ pulsechat_api
 
 Three containers with the same name.
 
-That's impossible.
+That is not possible.
 
 By removing container_name, Docker automatically generates unique names like:
 
@@ -2070,7 +2320,7 @@ pulsechat-pulsechat-api-2
 pulsechat-pulsechat-api-3
 ```
 
-Now scaling becomes possible.
+Scaling becomes possible.
 
 ##### Why replace ports with expose
 
@@ -2081,9 +2331,9 @@ ports:
   - "3000:3000"
 ```
 
-This publishes the port to your Mac.
+This publishes the port to the host machine.
 
-With three API containers, they can't all bind to host port 3000.
+With three API containers, they cannot all bind to host port 3000.
 
 Instead, use:
 
@@ -2096,9 +2346,9 @@ This keeps port 3000 available inside the Docker network only.
 
 NGINX can still reach each API container, but your host doesn't need direct access to them.
 
-Only NGINX exposes a host port (8080), becoming the single entry point.
+Only NGINX exposes a host port (`8080`), serving as the single entry point.
 
-This phase introduces three foundational production concepts you'll see in almost every scalable backend:
+This phase introduces three foundational production concepts found in nearly every scalable backend:
 
 ```
 Horizontal scaling — running multiple identical application instances.
@@ -2106,9 +2356,9 @@ Reverse proxying — NGINX sits in front of your application and forwards reques
 Load balancing — distributing incoming traffic across multiple application instances.
 ```
 
-## Phase 6 — Step 2: Scale the API to Multiple Instances
+## 6.2 — Scale the API to Multiple Instances
 
-From this point, you'll start thinking like a Backend + Infrastructure Engineer, which is a huge skill upgrade.
+From this point forward, you will approach problems as both a backend and infrastructure engineer.
 
 - By the end of this step, your architecture will look like this:
 
@@ -2130,7 +2380,7 @@ From this point, you'll start thinking like a Backend + Infrastructure Engineer,
            PostgreSQL        Redis
 ```
 
-- Notice something important: `All three applications share the same database and the same Redis instance.`
+All three application instances share the same PostgreSQL database and Redis instance.
 
 This is exactly how most production applications work.
 
@@ -2145,11 +2395,11 @@ pulsechat-api:
   build: .
 ```
 
-Normally, Compose creates: `pulsechat-api`
+Normally, Compose creates one container: `pulsechat-api`.
 
-one container.
+To scale, run:
 
-But if we execute:
+**Checkpoint:**
 
 ```sh
 docker compose up --scale pulsechat-api=3
@@ -2165,7 +2415,7 @@ pulsechat-api-2
 pulsechat-api-3
 ```
 
-These are three completely independent Node.js applications.
+These are three independent Node.js processes.
 
 Each one has:
 
@@ -2199,7 +2449,7 @@ expose:
   - "3000"
 ```
 
-Let's understand why.
+Consider why this change is necessary.
 
 Suppose three applications all try:
 
@@ -2211,9 +2461,7 @@ API2 → 3000
 API3 → 3000
 ```
 
-Your Mac has only one port 3000.
-
-The second application immediately fails.
+The host machine has only one port 3000. The second container would fail to bind.
 
 Instead:
 
@@ -2231,9 +2479,9 @@ No conflict.
 
 Only NGINX exposes: `localhost:8080`
 
-##### Why expose instead of ports?
+##### Why expose Instead of: ports?
 
-This is a very common interview question.
+This distinction is a common interview topic.
 
 ports
 
@@ -2242,7 +2490,7 @@ ports:
   - "3000:3000"
 ```
 
-means
+means:
 
 `Publish this port to the outside world.`
 
@@ -2259,11 +2507,13 @@ means
 
 `Only other Docker containers may access this port.`
 
-Your browser cannot.
+Your browser cannot reach it directly.
 
 NGINX can.
 
-This is more secure.
+This approach is more secure.
+
+**Checkpoint:**
 
 ```sh
 docker compose --env-file .env down
@@ -2272,7 +2522,7 @@ docker compose --env-file .env up -d --build --scale pulsechat-api=3
 
 ##### Expected Problem (And Why It's Good)
 
-I actually expect the scaling to not work perfectly on the first try.
+Scaling may not work perfectly on the first attempt—and that is expected.
 
 Why?
 
@@ -2280,17 +2530,44 @@ Why?
 
 `server pulsechat-api:3000;`
 
-It doesn't yet know there are three API instances.
+It does not yet account for three API instances.
 
-That's intentional.
+That is intentional.
 
-We're going to hit that issue, analyze it, and then fix it together. It's exactly how you'd troubleshoot this in a real production environment.
+We will encounter this issue, analyze it, and fix it together—the same workflow you would follow when troubleshooting in a production environment.
+
+
+### Key Takeaways — Phase 6
+
+- NGINX is the single public entry point; API containers stay on the internal network.
+- Long `proxy_read_timeout` values are required for persistent WebSocket connections.
+- Production traffic patterns: horizontal scaling, reverse proxying, load balancing.
+
+---
+
 
 # Phase 7 — Production Hardening
 
-Purpose: make the backend cleaner and safer.
+> **Phase goal:** Harden the backend for production with structured errors, logging, validation, and rate limits.
 
-We should add:
+### What You Will Learn
+
+- Return consistent socket and REST error shapes
+- Validate Socket.IO payloads explicitly—there is no global pipe
+- Replace file logging with stdout-friendly structured logs (Pino)
+- Identify instances in logs with `INSTANCE_ID`
+- Apply tiered rate limits to auth, messaging, and health endpoints
+
+### Prerequisites
+
+Phase 6 completed. NGINX on port 8080 fronts scaled API containers.
+
+---
+
+
+**Purpose:** Harden the backend for cleaner, safer production operation.
+
+**Add the following:**
 
 ```
 response DTOs
@@ -2303,7 +2580,7 @@ message ownership/security checks
 .env.example
 ```
 
-Recommended order:
+**Recommended implementation order:**
 
 ```
 socket error handling cleanup
@@ -2314,10 +2591,10 @@ better logs per API instance
 final project README/runbook
 ```
 
-## Step 1 — Socket Error Handling
+## 7.1 — Socket Error Handling
 
-- Right now, if something fails inside a socket event, the client may not always get a clean response.
-- We want all socket errors to look like this:
+- Currently, when a socket event fails, the client may not receive a consistent error response.
+- All socket errors should follow this structure:
 
 ```json
 {
@@ -2327,7 +2604,7 @@ final project README/runbook
 ```
 
 1. Create helper `src/chat/utils/socket-error.util.ts`
-2. Replace socket exceptions in the `chat.gateways.ts` replace it like this
+2. In `chat.gateway.ts`, replace socket exceptions as follows:
 
 ```ts
 throw new ForbiddenException('Socket is not authenticated');
@@ -2343,7 +2620,7 @@ Invalid socket payload
 → clean exception response
 ```
 
-Example bad payload:
+Example invalid payload:
 
 ```
 {
@@ -2351,7 +2628,7 @@ Example bad payload:
 }
 ```
 
-Should return:
+Expected response:
 
 ```
 {
@@ -2360,37 +2637,39 @@ Should return:
 }
 ```
 
-- But Socket.IO payloads are not being validated like REST bodies unless we explicitly validate them.
-- Then use that validation in the `chat.gateway.ts`
+- Socket.IO payloads are not validated like REST request bodies unless you add explicit validation.
+- Apply that validation in `chat.gateway.ts`.
 
 1. Create validation utility `src/chat/utils/validate-socket-payload.util.ts`
 
-- After adding the validations rebuild the docker
+- After adding validation, rebuild Docker:
+
+**Checkpoint:**
 
 ```sh
 docker compose --env-file .env up -d --build --scale pulsechat-api=3
 ```
 
-## Phase 7 - Step 2 - Strucutred Logging
+## 7.2 — Structured Logging with Pino
 
-##### Why we don’t write files in Docker
+##### Why We Don’t Write Log Files in Docker
 
-In Docker, this is bad:
+In Docker, writing logs to files is problematic:
 
 ```
 logs/error.log
 logs/combined.log
 ```
 
-Because containers are temporary. If the container restarts or is replaced, those files can disappear unless you mount volumes.
+Containers are ephemeral. If a container restarts or is replaced, those files disappear unless you mount persistent volumes.
 
-Better production flow:
+**Preferred production flow:**
 
 `App logs → stdout/stderr → Docker logs → CloudWatch / ELK / Grafana / Datadog`
 
-So locally you may write files, but in Docker/production, output to console only.
+You may write log files locally, but in Docker and production, write to the console only.
 
-##### Why INSTANCE_ID matters
+##### Why INSTANCE_ID Matters
 
 You now have:
 
@@ -2400,7 +2679,7 @@ pulsechat-api-2
 pulsechat-api-3
 ```
 
-If an error happens, this log is not enough:
+If an error occurs, this log line is insufficient:
 
 User connected
 
@@ -2413,26 +2692,26 @@ You need:
 }
 ```
 
-Then you know exactly which container handled the request/socket.
+This tells you exactly which container handled the request or socket connection.
 
-Inside Docker, every container already has a hostname, so we can use:
+Inside Docker, every container already has a hostname, so use:
 
 ```
 process.env.INSTANCE_ID || process.env.HOSTNAME
 ```
 
-If INSTANCE_ID is not manually provided, Docker gives each container a unique hostname.
+If `INSTANCE_ID` is not set manually, Docker assigns each container a unique hostname.
 
-### Install required package
+### Install Required Package
 
 ```sh
 yarn add nestjs-pino pino-http pino
 yarn add -D pino-pretty
 ```
 
-### Replace logger module
+### Replace Logger Module
 
-Create/Update the `src/common/logger/logger.module.ts`
+Create or update `src/common/logger/logger.module.ts`
 
 ```ts
 import { Global, Module } from '@nestjs/common';
@@ -2481,7 +2760,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 export class LoggerModule {}
 ```
 
-### Remove old AppLogger
+### Remove Old AppLogger
 
 You can delete or stop using:
 
@@ -2489,16 +2768,16 @@ You can delete or stop using:
 
 Do not use Winston for now.
 
-rebuild docker
+Rebuild Docker:
 
 - `docker compose --env-file .env up -d --build --scale pulsechat-api=3`
-- Then run this to test the logs
-- - `docker logs -f pulsechat-pulsechat-api-3 `
-- - `docker logs --tail=30 pulsechat-pulsechat-api-1`
+- Then verify logs with:
+  - `docker logs -f pulsechat-pulsechat-api-3 `
+  - `docker logs --tail=30 pulsechat-pulsechat-api-1`
 
-## Phase 7 - Step 2 - Global Exception
+## 7.3 — Global REST Exception Filter
 
-- Goal `All REST errors should return the same clean structure.`
+- **Goal:** `All REST errors should return the same clean structure.`
 
 Example:
 
@@ -2512,9 +2791,9 @@ Example:
 }
 ```
 
-Why we need this
+##### Why This Is Needed
 
-Right now errors may look different depending on where they come from:
+Currently, errors may vary depending on their source:
 
 ```
 validation errors
@@ -2523,18 +2802,18 @@ auth errors
 unexpected server errors
 ```
 
-A global exception filter makes REST errors predictable for frontend.
+A global exception filter makes REST errors predictable for the frontend.
 
 ### Create Filter
 
 - Create `src/common/filters/http-exception.filter.ts`
-- Register that Global Exception filter in the `main.ts` like this `app.useGlobalFilters(new HttpExceptionFilter(logger));`
-- Rebuild the docker `docker compose --env-file .env up -d --build --scale pulsechat-api=3`
-- test it using wrong route `curl http://localhost:8080/wrong-route`
+- Register the global exception filter in `main.ts` as follows: `app.useGlobalFilters(new HttpExceptionFilter(logger));`
+- Rebuild Docker: `docker compose --env-file .env up -d --build --scale pulsechat-api=3`
+- Test with an invalid route: `curl http://localhost:8080/wrong-route`
 
-## Phase 7 - Step 4 - Rate Limiting Improvements.
+## 7.4 — Tiered Rate Limiting
 
-- Goal
+- **Goal**
 
 ```
 Auth endpoints → strict
@@ -2543,7 +2822,7 @@ General APIs → normal
 Health check → no limit
 ```
 
-- Recommended Limits
+- **Recommended Limits**
 
 ```
 /health              no throttle
@@ -2554,14 +2833,14 @@ Health check → no limit
 general APIs         100 requests / minute
 ```
 
-- .env -> this means normal APIs get 100 requests per minute
+- In `.env`, these values set the default limit to 100 requests per minute for general APIs:
 
 ```.env
 THROTTLE_TTL=60000
 THROTTLE_LIMIT=100
 ```
 
-### Auth strict limit
+### Auth Strict Limit
 
 ```ts
 // Auth Controller
@@ -2580,30 +2859,30 @@ login(@Body() dto: LoginDto) {
 @Get('health')
 ```
 
-Login/register are expensive and sensitive, so stricter.
+Login and register endpoints are expensive and sensitive, so they use stricter limits.
 
-Message sending can be frequent, but should still be protected from spam.
+Message sending can be frequent but should still be protected from spam.
 
-General APIs need normal protection.
+General APIs require standard protection.
 
-### Message Ownership / Security Checks
+### 7.5 — Message Ownership and Security Checks
 
-We already check: `Only conversation participants can send/read messages`
+We already enforce: `Only conversation participants can send/read messages`
 
-Now we should tighten edge cases:
+Next, tighten edge cases:
 
-1. validate conversation exists
-2. prevent sending empty/whitespace messages
-3. prevent users from accessing messages outside their conversations
-4. standardize Forbidden vs NotFound
+1. Validate that the conversation exists
+2. Prevent sending empty or whitespace-only messages
+3. Prevent users from accessing messages outside their conversations
+4. Standardize `Forbidden` vs `NotFound` responses
 
-Recommended security rule: `If user is not a participant, return 404 or 403?`
+**Recommended security rule:** `If user is not a participant, return 404 or 403?`
 
-For chat apps, I recommend 404 for conversation access: `Conversation not found`
+For chat applications, return **404** for conversation access: `Conversation not found`
 
-Because 403 confirms the conversation exists.
+A **403** response confirms the conversation exists.
 
-So for:
+For the following endpoints:
 
 ```
 GET /conversations/:id
@@ -2611,13 +2890,40 @@ GET /messages/:conversationId
 POST /messages
 ```
 
-we should return: `404 Conversation not found`
+return `404 Conversation not found` when the user is not a participant.
 
-when the user is not a participant.
+
+### Key Takeaways — Phase 7
+
+- In Docker, log to stdout—containers are ephemeral.
+- Return 404 (not 403) for unauthorized conversation access to avoid leaking existence.
+- Auth endpoints deserve the strictest throttle limits.
+
+---
+
 
 # Phase 8 — Chat Product Features
 
-Optional but useful:
+> **Phase goal:** Implement product-grade chat features: statuses, read receipts, previews, edits, deletes, and group management.
+
+### What You Will Learn
+
+- Model message lifecycle: SENT → DELIVERED → READ
+- Denormalize `lastMessagePreview` for fast conversation lists
+- Compute unread counts from `ConversationParticipant.lastReadAt`
+- Use soft delete and edit timestamps for auditability
+- Expose group management via REST first, then broadcast over Socket.IO
+
+### Prerequisites
+
+Phases 1–7 completed. Multi-instance realtime stack must be stable.
+
+---
+
+
+### Features in This Phase
+
+Optional but valuable additions:
 
 ```
 Message Statuses
@@ -2631,11 +2937,13 @@ Group Management
 Leave Conversation
 ```
 
-## Phase 8.1 — Message Statuses
+## 8.1 — Message Statuses
 
-This is the foundation for almost everything else.
+**Concept:** Message status (`SENT`, `DELIVERED`, `READ`) is the foundation for delivery receipts, read receipts, and unread counts. Store status on the row—not in a separate events table—for simpler queries.
 
-Instead of only storing:
+This is the foundation for nearly all subsequent features.
+
+Instead of storing only:
 
 ```
 Message
@@ -2644,9 +2952,11 @@ id
 content
 senderId
 createdAt
+```
 
-We'll support:
+The schema will support:
 
+```
 Message
 -------
 id
@@ -2667,14 +2977,14 @@ DELIVERED
 READ
 ```
 
-Everything else builds on this.
+All other features build on this model.
 
-- update the `prisma/schema.prisma` and add the MessageStatus enum
-- in the `Message` model we then add `status MessageStatus @default(SENT)`, Every new message starts as SENT. Later `Receiver gets message → DELIVERED
+- Update `prisma/schema.prisma` and add the `MessageStatus` enum
+- In the `Message` model, add `status MessageStatus @default(SENT)`. Every new message starts as `SENT`. Later: `Receiver gets message → DELIVERED
 Receiver opens chat → READ`
-- `editedAt DateTime?` Null means message was never edited.
-- `deletedAt DateTime?` Null means message is active. If set, the message is soft-deleted.
-- We are not deleting rows because chat history needs auditability and consistency.
+- `editedAt DateTime?` — `null` means the message was never edited.
+- `deletedAt DateTime?` — `null` means the message is active. When set, the message is soft-deleted.
+- Rows are not hard-deleted; chat history requires auditability and consistency.
 
 ```sh
 # Run Migrations
@@ -2684,7 +2994,9 @@ docker compose --env-file .env run --rm pulsechat-api npx prisma migrate dev --n
 npx prisma generate
 ```
 
-## Phase 8.2 — Delivered Status
+## 8.2 — Delivered Status
+
+**Concept:** When a receiver’s client acknowledges receipt, the server promotes `SENT → DELIVERED` and broadcasts the update to the conversation room.
 
 ```
 Flow:
@@ -2710,8 +3022,8 @@ update Delivered
 broadcast status
 ```
 
-- `SENT → DELIVERED`, When a receiver gets a message, their client emits: `message_delivered`
-  Then server:
+- **`SENT → DELIVERED`:** When a receiver receives a message, their client emits `message_delivered`.
+  The server then:
 
 ```
 checks participant
@@ -2722,9 +3034,11 @@ broadcasts message_delivered
 
 - `src/chat/dto/message-delivered.dto.ts`
 
-## Phase 8.3 — Read Receipts
+## 8.3 — Read Receipts
 
-After conversation opens: `mark_messages_read`
+**Concept:** Opening a conversation means the user has seen messages. Mark all others’ messages as `READ` and broadcast `messages_read` to participants.
+
+When a conversation opens, emit `mark_messages_read`:
 
 ```
 Server
@@ -2742,16 +3056,16 @@ messages_read
 
 ```
 
-- `DELIVERED → READ`, When a user opens a conversation, the client emits: `message_read`, Then backend marks all messages in that conversation as READ, except the user’s own messages.
+- **`DELIVERED → READ`:** When a user opens a conversation, the client emits `message_read`. The backend then marks all messages in that conversation as `READ`, except the user's own messages.
 - `src/chat/dto/message-read.dto.ts`
-- Add method in MessagesService `markConversationMessagesRead`
-- Add socket event in ChatGateway `handleMessagesRead`
+- Add method in `MessagesService`: `markConversationMessagesRead`
+- Add socket event in `ChatGateway`: `handleMessagesRead`
 
-## Phase 8.4 — Last Message Preview
+## 8.4 — Last Message Preview
 
-Instead of calculating every time: `Conversation`
+**Concept:** Conversation lists should not join the full messages table on every request. Denormalize `lastMessageId`, `lastMessagePreview`, and `lastMessageAt` on `Conversation`.
 
-stores
+Instead of computing the preview on every request, the `Conversation` model stores:
 
 ```
 lastMessageId
@@ -2759,15 +3073,17 @@ lastMessagePreview
 lastMessageAt
 ```
 
-Conversation list becomes extremely fast.
+This makes the conversation list extremely fast to load.
 
-- Add to Prisma `Conversation`
+- Add the following fields to the Prisma `Conversation` model:
 
 ```
 lastMessageId      String?
 lastMessagePreview String?
 lastMessageAt      DateTime?
 ```
+
+**Checkpoint:**
 
 ```sh
 docker compose --env-file .env up -d postgres redis
@@ -2776,17 +3092,19 @@ docker compose --env-file .env run --rm pulsechat-api npx prisma migrate dev --n
 npx prisma generate
 ```
 
-## Phase 8.5 — Unread Counts
+## 8.5 — Unread Counts
 
-This is the first "hard" feature.
+**Concept:** Store `lastReadAt` on `ConversationParticipant`. Unread count = messages after that timestamp where `senderId ≠ currentUserId`.
 
-There are several possible database designs.
+This is the first substantially complex feature.
 
-We'll choose the scalable one used by large chat systems.
+Several database designs are possible.
 
-- Add this to the `ConversationParticipants`: `lastReadAt DateTime?`
+We will use the scalable approach employed by large chat systems.
 
-Why?
+- Add to `ConversationParticipants`: `lastReadAt DateTime?`
+
+**Why?**
 
 Unread count for a user becomes:
 
@@ -2795,7 +3113,7 @@ messages after participant.lastReadAt
 AND senderId != currentUserId
 ```
 
-- In `markConversationMessagesRead`, after `updateMany`, also update participant:
+- In `markConversationMessagesRead`, after `updateMany`, also update the participant:
 
 ```ts
 await this.prisma.conversationParticipant.update({
@@ -2813,15 +3131,17 @@ await this.prisma.conversationParticipant.update({
 
 - Add unread count to `getMyConversations`
 
-## Phase 8.6 — Edit Message
+## 8.6 — Edit Message
 
-Only sender can edit.
+**Concept:** Only the sender may edit. Set `editedAt` and update `content` in place—never insert a new row. Implement via REST first; the gateway broadcasts `message_edited`.
 
-Store `editedAt`
+Only the sender may edit a message.
 
-Frontend shows `Edited`
+Store `editedAt`.
 
-- Goal
+The frontend displays `Edited`.
+
+- **Goal**
 
 ```
 Only the sender can edit their own message.
@@ -2833,15 +3153,15 @@ We update content + editedAt.
 Socket room receives message_edited event
 ```
 
-- We will add `PATCH /messages/:messageId`
-- and later a socket event: `message_edited`
-- Recommended flow `REST first → then Socket.IO broadcast`
+- Add `PATCH /messages/:messageId`
+- Add a socket event: `message_edited`
+- **Recommended flow:** `REST first → then Socket.IO broadcast`
 
-##### Why this is good
+##### Why This Approach Works
 
-We are not duplicating edit logic inside the gateway.
+Edit logic is not duplicated inside the gateway.
 
-This line:
+This call:
 
 `this.messagesService.updateMessage(...)`
 
@@ -2855,13 +3175,15 @@ deleted message protection
 editedAt update
 ```
 
-The gateway only handles realtime broadcasting.
+The gateway is responsible only for realtime broadcasting.
 
-## Phase 8.7 — Delete Message
+## 8.7 — Delete Message (Soft Delete)
 
-Soft delete.
+**Concept:** Hard deletes break audit trails. Set `deletedAt` and replace content with a placeholder string. Deleted messages cannot be edited.
 
-Instead of removing row:
+Use soft delete.
+
+Instead of removing the row:
 
 ```
 content = NULL
@@ -2869,20 +3191,20 @@ content = NULL
 deletedAt = now()
 ```
 
-Frontend displays
+The frontend displays:
 
 ```
 This message was deleted
 ```
 
-- We’ll implement soft delete, not hard delete.
+- Implement soft delete, not hard delete.
 
 ```
 deletedAt = now()
 content = null or "This message was deleted"
 ```
 
-- Since your current Prisma content is probably required String, we’ll keep it simple for now:
+- Because the current Prisma `content` field is likely a required `String`, keep the initial implementation simple:
 
 ```
 content = "This message was deleted"
@@ -2898,9 +3220,11 @@ Deleted messages cannot be edited
 Conversation room receives message_deleted
 ```
 
-## Phase 8.8 — Group Management
+## 8.8 — Group Management
 
-Endpoints
+**Concept:** Group operations (rename, add/remove participants) are authorization-sensitive. Enforce rules in the service layer, expose REST endpoints, then broadcast socket events.
+
+**Endpoints:**
 
 ```
 Add participant
@@ -2912,7 +3236,7 @@ Rename group
 Update avatar
 ```
 
-- We will add these REST APIs first:
+- Add these REST APIs first:
 
 ```
 PATCH /conversations/:id/title
@@ -2920,7 +3244,7 @@ POST  /conversations/:id/participants
 DELETE /conversations/:id/participants/:userId
 ```
 
-- Rules
+- **Rules**
 
 ```
 Only participants can manage group
@@ -2929,7 +3253,9 @@ Cannot remove the last participant
 Cannot add duplicate participant
 ```
 
-## Phase 8.9 — Leave Conversation
+## 8.9 — Leave Conversation
+
+**Concept:** A participant may leave a group voluntarily, but the last member cannot leave—otherwise the conversation becomes orphaned.
 
 `DELETE /conversations/:id/leave`
 
@@ -2937,7 +3263,7 @@ or
 
 `POST /conversations/:id/leave`
 
-depending on API style.
+depending on your API style.
 
 ```
 Only participants can leave
@@ -2945,7 +3271,9 @@ Only group conversations can be left
 Cannot leave if you are the last participant
 ```
 
-- After everything completed make migrations locally and generate the prisma
+- After completing all Phase 8 work, run migrations locally and regenerate the Prisma client:
+
+**Checkpoint:**
 
 ```sh
 npx prisma migrate dev --name phase_8_chat_product_features
@@ -2959,9 +3287,36 @@ docker logs --tail=80 pulsechat-pulsechat-api-1
 npx prisma studio
 ```
 
+
+### Key Takeaways — Phase 8
+
+- Each product feature gets its own Prisma migration.
+- REST services own business rules; gateways only broadcast results.
+- Soft delete preserves history while hiding content from users.
+
+---
+
+
 # Phase 9 — Testing
 
-We should add:
+> **Phase goal:** Plan and execute a testing strategy covering services, REST, sockets, and multi-instance behavior.
+
+### What You Will Learn
+
+- Write unit tests for service-layer business logic
+- Add e2e tests for REST flows with authentication
+- Build socket integration tests with `socket.io-client`
+- Verify Redis adapter behavior across instances
+- Inspect the database with Prisma Studio against Docker Postgres
+
+### Prerequisites
+
+All prior phases completed or the feature under test is implemented.
+
+---
+
+
+Add the following test coverage:
 
 ```
 unit tests for services
@@ -2969,3 +3324,25 @@ e2e tests for REST APIs
 socket integration tests
 multi-instance Redis adapter test
 ```
+
+1. Run Prisma Studio against the Docker database:
+
+```sh
+# first pull the tables to check if we are getting the tables
+npx prisma db pull \
+  --url="postgresql://chat_user:chat_password@localhost:5433/pulsechat?schema=public"
+
+# Then run the studio
+npx prisma studio \
+  --url="postgresql://chat_user:chat_password@localhost:5433/pulsechat?schema=public" \
+  --port 5555
+```
+
+### Key Takeaways — Phase 9
+
+- Test the service layer first—it is the source of truth for business rules.
+- Socket tests require running servers and valid JWT tokens from `.env`.
+- For local Prisma against Docker Postgres, use `localhost:5433` as the host.
+
+---
+

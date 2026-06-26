@@ -207,36 +207,49 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket, // this is the socket instance
     @MessageBody() body: JoinConversationDto, // this is the data sent by the client
   ) {
-    const dto = await validateSocketPayload(JoinConversationDto, body);
+    console.log('==============================');
+    console.log('JOIN EVENT RECEIVED');
+    console.log('Client:', client.id);
+    console.log('User:', client.user);
+    console.log('Body:', body);
+    console.log('==============================');
 
-    if (!client.user) {
-      throw socketError('Not Authenticated yet', 'UNAUTHORIZED');
-    }
+    try {
+      const dto = await validateSocketPayload(JoinConversationDto, body);
+      console.log('DTO validated:', dto);
 
-    const isParticipant = await this.conversationsService.isUserParticipant(
-      client.user.id,
-      dto.conversationId,
-    );
+      if (!client.user) {
+        throw socketError('Not Authenticated yet', 'UNAUTHORIZED');
+      }
 
-    if (!isParticipant) {
-      throw socketError(
-        'You are not a participant of this conversation',
-        'FORBIDDEN',
+      const isParticipant = await this.conversationsService.isUserParticipant(
+        client.user.id,
+        dto.conversationId,
       );
+
+      if (!isParticipant) {
+        throw socketError(
+          'You are not a participant of this conversation',
+          'FORBIDDEN',
+        );
+      }
+
+      const room = `conversation-${dto.conversationId}`;
+
+      await client.join(room);
+
+      return {
+        event: 'conversation_joined',
+        data: {
+          conversationId: dto.conversationId,
+          room,
+          joined: true,
+        },
+      };
+    } catch (e) {
+      console.error('Validation failed:', e);
+      throw e;
     }
-
-    const room = `conversation-${dto.conversationId}`;
-
-    await client.join(room);
-
-    return {
-      event: 'conversation_Joined',
-      data: {
-        conversationId: dto.conversationId,
-        room,
-        joined: true,
-      },
-    };
   }
 
   @SubscribeMessage('send_message')
@@ -260,7 +273,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(room).emit('new_message', message);
 
     return {
-      event: 'message_Sent',
+      event: 'message_sent',
       data: message,
     };
   }

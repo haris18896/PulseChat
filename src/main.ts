@@ -104,6 +104,10 @@ async function bootstrap() {
   redisIoAdapter.connectToRedis();
   app.useWebSocketAdapter(redisIoAdapter);
 
+  const server = app.getHttpServer();
+
+  console.log('Socket.IO adapter initialized', server);
+
   // Listen on port
   await app.listen(port, '0.0.0.0');
 }

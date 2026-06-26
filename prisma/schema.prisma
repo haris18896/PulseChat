@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/Prisma"
@@ -13,60 +8,53 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  username  String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id            String                    @id @default(uuid())
+  email         String                    @unique
+  username      String                    @unique
+  password      String
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
   conversations ConversationParticipant[]
-  messages Message[]
+  messages      Message[]
 }
-
 
 model Conversation {
-  id        String   @id @default(uuid())
-  title     String?
-  isGroup   Boolean  @default(false)
-  lastMessageAt DateTime?
-  lastMessageId String?
+  id                 String                    @id @default(uuid())
+  title              String?
+  isGroup            Boolean                   @default(false)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  lastMessageAt      DateTime?
+  lastMessageId      String?
   lastMessagePreview String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  participants ConversationParticipant[]
-  messages Message[]
+  participants       ConversationParticipant[]
+  messages           Message[]
 }
 
-
 model ConversationParticipant {
-  id        String   @id @default(uuid())
+  id             String       @id @default(uuid())
   conversationId String
-  userId String
-  joinedAt DateTime @default(now())
-  lastReadAt DateTime?
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
 }
 
-
 model Message {
-  id        String   @id @default(uuid())
+  id             String        @id @default(uuid())
   conversationId String
-  senderId String
-  content String
-  status MessageStatus @default(SENT)
-  editedAt DateTime?
-  deletedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderId       String
+  content        String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+  editedAt       DateTime?
+  status         MessageStatus @default(SENT)
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
 }
 
 enum MessageStatus {
