@@ -347,7 +347,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       throw socketError('Socket is not authenticated', 'UNAUTHORIZED');
     }
 
-    const message = await this.messagesService.markMessageDelievered(
+    const message = await this.messagesService.markMessageDelivered(
       client.user.id,
       dto.conversationId,
       dto.messageId,

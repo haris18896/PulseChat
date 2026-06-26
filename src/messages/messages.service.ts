@@ -128,7 +128,7 @@ export class MessagesService {
     };
   }
 
-  async markMessageDelievered(
+  async markMessageDelivered(
     currentUserId: string,
     conversationId: string,
     messageId: string,

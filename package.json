@@ -104,7 +104,8 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^../../generated/Prisma/client$": "<rootDir>/test/prisma-client.mock.ts"
+      "^src/(.*)$": "<rootDir>/$1",
+      "^generated/(.*)$": "<rootDir>/../generated/$1"
     }
   },
   "lint-staged": {
