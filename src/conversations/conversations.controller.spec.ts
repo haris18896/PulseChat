@@ -246,9 +246,177 @@ describe('ConversationController', () => {
     });
   });
 
-  // describe('addParticipantToGroup', () => {});
+  describe('addParticipantToGroup', () => {
+    it('should call conversationsService.addParticipantToGroup with user id and conversation id and dto', async () => {
+      const conversationId = 'conversation-1';
+      const dto = {
+        userId: 'user-2',
+      };
 
-  // describe('removeParticipantFromGroup', () => {});
+      const expectedConversation = {
+        id: 'conversation-1',
+        title: 'Conversation 1',
+      };
 
-  // describe('leaveConversation', () => {});
+      conversationsServiceMock.addParticipantToGroup.mockResolvedValue(
+        expectedConversation,
+      );
+
+      const result = await controller.addParticipantToGroup(
+        mockUser as any,
+        conversationId,
+        dto,
+      );
+
+      expect(result).toEqual(expectedConversation);
+      expect(
+        conversationsServiceMock.addParticipantToGroup,
+      ).toHaveBeenCalledWith(mockUser.id, conversationId, dto.userId);
+    });
+
+    it('should throw NotFoundException if user not found', async () => {
+      const conversationId = 'conversation-1';
+      const dto = {
+        userId: 'user-2',
+      };
+
+      conversationsServiceMock.addParticipantToGroup.mockRejectedValue(
+        new NotFoundException('User not found'),
+      );
+
+      await expect(
+        controller.addParticipantToGroup(mockUser as any, conversationId, dto),
+      ).rejects.toThrow(NotFoundException);
+      expect(
+        conversationsServiceMock.addParticipantToGroup,
+      ).toHaveBeenCalledWith(mockUser.id, conversationId, dto.userId);
+    });
+
+    it('should throw BadRequestException if user is already a participant', async () => {
+      const conversationId = 'conversation-1';
+      const dto = {
+        userId: 'user-2',
+      };
+
+      conversationsServiceMock.addParticipantToGroup.mockRejectedValue(
+        new BadRequestException('User is already a participant'),
+      );
+
+      await expect(
+        controller.addParticipantToGroup(mockUser as any, conversationId, dto),
+      ).rejects.toThrow(BadRequestException);
+      expect(
+        conversationsServiceMock.addParticipantToGroup,
+      ).toHaveBeenCalledWith(mockUser.id, conversationId, dto.userId);
+    });
+  });
+
+  describe('removeParticipantFromGroup', () => {
+    it('should call conversationsService.removeParticipantFromGroup with user id and conversation id and userId', async () => {
+      const conversationId = 'conversation-1';
+      const userId = 'user-2';
+
+      const expectedConversation = {
+        id: 'conversation-1',
+        title: 'Conversation 1',
+      };
+
+      conversationsServiceMock.removeParticipantFromGroup.mockResolvedValue(
+        expectedConversation,
+      );
+
+      const result = await controller.removeParticipantFromGroup(
+        mockUser as any,
+        conversationId,
+        userId,
+      );
+
+      expect(result).toEqual(expectedConversation);
+      expect(
+        conversationsServiceMock.removeParticipantFromGroup,
+      ).toHaveBeenCalledWith(mockUser.id, conversationId, userId);
+    });
+
+    it('should throw NotFoundException if user not found', async () => {
+      const conversationId = 'conversation-1';
+      const userId = 'user-2';
+
+      conversationsServiceMock.removeParticipantFromGroup.mockRejectedValue(
+        new NotFoundException('User not found'),
+      );
+
+      await expect(
+        controller.removeParticipantFromGroup(
+          mockUser as any,
+          conversationId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(
+        conversationsServiceMock.removeParticipantFromGroup,
+      ).toHaveBeenCalledWith(mockUser.id, conversationId, userId);
+    });
+
+    it('should throw BadRequestException if user is the last participant', async () => {
+      const conversationId = 'conversation-1';
+      const userId = 'user-2';
+
+      conversationsServiceMock.removeParticipantFromGroup.mockRejectedValue(
+        new BadRequestException('Cannot remove the last participant'),
+      );
+
+      await expect(
+        controller.removeParticipantFromGroup(
+          mockUser as any,
+          conversationId,
+          userId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(
+        conversationsServiceMock.removeParticipantFromGroup,
+      ).toHaveBeenCalledWith(mockUser.id, conversationId, userId);
+    });
+  });
+
+  describe('leaveConversation', () => {
+    it('should call conversationsService.leaveConversation with user id and conversation id', async () => {
+      const conversationId = 'conversation-1';
+
+      const expectedConversation = {
+        id: 'conversation-1',
+        title: 'Conversation 1',
+      };
+
+      conversationsServiceMock.leaveConversation.mockResolvedValue(
+        expectedConversation,
+      );
+
+      const result = await controller.leaveConversation(
+        mockUser as any,
+        conversationId,
+      );
+
+      expect(result).toEqual(expectedConversation);
+      expect(conversationsServiceMock.leaveConversation).toHaveBeenCalledWith(
+        mockUser.id,
+        conversationId,
+      );
+    });
+
+    it('should throw NotFoundException if conversation not found', async () => {
+      const conversationId = 'conversation-1';
+
+      conversationsServiceMock.leaveConversation.mockRejectedValue(
+        new NotFoundException('Conversation not found'),
+      );
+
+      await expect(
+        controller.leaveConversation(mockUser as any, conversationId),
+      ).rejects.toThrow(NotFoundException);
+      expect(conversationsServiceMock.leaveConversation).toHaveBeenCalledWith(
+        mockUser.id,
+        conversationId,
+      );
+    });
+  });
 });
