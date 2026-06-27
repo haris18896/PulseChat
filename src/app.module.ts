@@ -1,12 +1,27 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { PrismaModule } from './prisma/prisma.module';
-import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+
+// -- Services
+import { AppService } from './app.service';
+
+// -- Controllers
+import { AppController } from './app.controller';
+
+// -- Third Party
 import { Redis } from 'ioredis';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+
+// -- Modules
+import { AuthModule } from './auth/auth.module';
+import { ChatModule } from './chat/chat.module';
+import { RedisModule } from './redis/redis.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { PresenceModule } from './presence/presence.module';
+import { MessagesModule } from './messages/messages.module';
+import { LoggerModule } from './common/logger/logger.module';
+import { ConversationsModule } from './conversations/conversations.module';
 
 @Module({
   imports: [
@@ -30,6 +45,13 @@ import { Redis } from 'ioredis';
       ],
     }),
     PrismaModule,
+    RedisModule,
+    AuthModule,
+    ConversationsModule,
+    MessagesModule,
+    ChatModule,
+    PresenceModule,
+    LoggerModule,
   ],
   controllers: [AppController],
   providers: [

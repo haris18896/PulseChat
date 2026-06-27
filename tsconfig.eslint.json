@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "resolvePackageJsonExports": false,
+    "incremental": false
+  },
+  "include": ["src/**/*", "test/**/*", "prisma.config.ts", "socket-tests/**/*"]
+}
